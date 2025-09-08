@@ -1,6 +1,6 @@
 {
   "version": "1.0.0",
-  "contactSearchUrl": "https://sample-cc-hiroyou-20250820.my.connect.aws/contact-search",
+  "contactSearchUrl": "https://xxxxxx.my.connect.aws/contact-search",
   "maxContactAttributes": 10,
   "contactAttributes": {
     "Key1": "電話番号",
