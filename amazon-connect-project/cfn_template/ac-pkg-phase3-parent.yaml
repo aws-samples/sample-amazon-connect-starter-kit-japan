@@ -15,20 +15,15 @@ Metadata:
         Parameters:
           - InstanceAlias
           - ConnectInstanceArn
-          - CaseTemplateName
-          - CaseTemplateId
+          - CasesDomainId
       - Label:
-          default: "Q in Connect Configuration"
+          default: "Amazon Connect AI agents Configuration"
         Parameters:
           - QiCDomainArn
-          - LexBotName
-          - LexBotId
       - Label:
           default: "3rd Party Application Configuration"
         Parameters:
           - ApplicationName
-          - SecurityProfileName
-          - CloudFrontWebAclARN
     ParameterLabels:
       AwsAccountId:
         default: "AWS Account ID"
@@ -38,20 +33,12 @@ Metadata:
         default: "Connect InstanceAlias"
       ConnectInstanceArn:
         default: "Connect Instance ARN"
-      CaseTemplateName:
-        default: "Case Template Name"
-      CaseTemplateId:
-        default: "Case Template ID"
+      CasesDomainId:
+        default: "Connect cases domain ID"
       QiCDomainArn:
-        default: "Q in Connect Assistant ARN"
-      LexBotName:
-        default: "Lex Bot Name"
-      LexBotId:
-        default: "Lex Bot ID"
+        default: "Connect AI agents domain ARN"
       ApplicationName:
         default: "3rd Party Application Name"
-      SecurityProfileName:
-        default: "Security Profile Name"
 
 Parameters:
   AwsAccountId:
@@ -72,26 +59,12 @@ Parameters:
 
   QiCDomainArn:
     Type: String
-    Description: 'The Assistant Arn of the Amazon Q(ARN of the QiC)'
+    Description: 'Connect AI agents domain Arn'
     Default: 'arn:aws:wisdom:ap-northeast-1:xxxx:assistant/xxxx'
 
-  CaseTemplateName:
+  CasesDomainId:
     Type: String
-    Description: 'Name of the case template'
-    Default: 'sample-case-template'
-
-  CaseTemplateId:
-    Type: String
-    Description: 'ID of the case template'
-
-  LexBotName:
-    Type: String
-    Description: 'Name of the Lex Bot'
-    Default: 'sample-lex-qic'
-
-  LexBotId:
-    Type: String
-    Description: 'ID of the Lex Bot'
+    Description: 'ID of the Amazon Connect cases domain'
 
   # Application Parameters
   ApplicationName:
@@ -99,63 +72,74 @@ Parameters:
     Description: 'Name of the Connect 3rd Party Application'
     Default: 'MyConnectApp'
 
-  SecurityProfileName:
-    Type: String
-    Description: 'Name of new security profile'
-    Default: 'CustomAgent'
-
-  CloudFrontWebAclARN:
-    Type: String
-    Description: 'ARN of WebAcl'
-    Default: 'arn:aws:wafv2:us-east-1:xxxx:global/webacl/myapp-webacl/xxxx'
-
   Region:
     Type: String
-    Description: The AWS Region where the S3 bucket is located
+    Description: Target Region to specify Amazon Connect instance, S3 bucket, and LLM for Connect AI agents prompts
     Default: ap-northeast-1
     AllowedValues:
       - ap-northeast-1
-      - ap-northeast-2
-      - ap-northeast-3
-      - ap-southeast-1
-      - ap-southeast-2
       - us-east-1
-      - us-east-2
-      - us-west-1
-      - us-west-2
-      - eu-west-1
-      - eu-central-1
 
 Resources:
-  # 1. Contact Flow Stack
+  # 1. ConversationalBot Stack
+  ConversationalBotStack:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: !Sub 'https://amazonconnect-${InstanceAlias}-app.s3.${AWS::Region}.amazonaws.com/amazon-connect-project/cfn_template/ac-pkg-phase3-lexbot.yaml'
+      Parameters:
+        ConnectInstanceArn: !Ref ConnectInstanceArn 
+        QiCAssistantArn: !Ref QiCDomainArn
+        QiCAssistantId: !Select [1, !Split ['assistant/', !Ref QiCDomainArn]]  # AssistantIdを抽出 
+        LexBotName: !Sub '${AWS::StackName}-lex-aiagents' 
+        LexBotAliasName: !Sub '${AWS::StackName}-demo' 
+
+  # 2. CasesTemplate Stack
+  CasesTemplateStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: ConversationalBotStack
+    Properties:
+      TemplateURL: !Sub 'https://amazonconnect-${InstanceAlias}-app.s3.${AWS::Region}.amazonaws.com/amazon-connect-project/cfn_template/ac-pkg-phase3-casetemplate-stack.yaml'
+      Parameters:
+        CasesDomainId: !Ref CasesDomainId
+        CasesTemplateName: !Sub '${AWS::StackName}-cases-template'
+        
+  # 3. QiC AI Agent Stack
+  QiCAIAgentStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: CasesTemplateStack
+    Properties:
+      TemplateURL: !Sub 'https://amazonconnect-${InstanceAlias}-app.s3.${AWS::Region}.amazonaws.com/amazon-connect-project/cfn_template/ac-pkg-phase3-qic-stack.yaml'
+      Parameters:
+        AssistantId: !Select [1, !Split ['assistant/', !Ref QiCDomainArn]]  # AssistantIdを抽出
+        QicPrefix: !Ref 'AWS::StackName'
+        ConnectInstanceArn: !Ref ConnectInstanceArn
+        Region: !Ref Region
+        
+  # 4. Contact Flow Stack
   ContactFlowStack:
     Type: AWS::CloudFormation::Stack
+    DependsOn: QiCAIAgentStack
     Properties:
       TemplateURL: !Sub 'https://amazonconnect-${InstanceAlias}-app.s3.${AWS::Region}.amazonaws.com/amazon-connect-project/cfn_template/ac-pkg-phase3-contactflow-stack.yaml'
       Parameters:
         AwsAccountId: !Ref AwsAccountId
         ConnectInstanceArn: !Ref ConnectInstanceArn
         QiCDomainArn: !Ref QiCDomainArn
-        CaseTemplateName: !Ref CaseTemplateName
-        CaseTemplateId: !Ref CaseTemplateId
-        LexBotName: !Ref LexBotName
-        LexBotId: !Ref LexBotId
+        CaseTemplateName: !Sub '${AWS::StackName}-cases-template'
+        CaseTemplateId: !GetAtt CasesTemplateStack.Outputs.TemplateId
+        LexBotName: !GetAtt ConversationalBotStack.Outputs.OrchestrationLexBotName
+        LexBotId: !GetAtt ConversationalBotStack.Outputs.OrchestrationLexBotId
+        LexBotAliasName: !Sub '${AWS::StackName}-demo' 
+        LexBotAliasId: !GetAtt ConversationalBotStack.Outputs.OrchestrationLexBotAliasId
         FlowNamePrefix: !Ref 'AWS::StackName'
-
-  # 2. QiC AI Agent Stack
-  QiCAIAgentStack:
-    Type: AWS::CloudFormation::Stack
-    DependsOn: ContactFlowStack
-    Properties:
-      TemplateURL: !Sub 'https://amazonconnect-${InstanceAlias}-app.s3.${AWS::Region}.amazonaws.com/amazon-connect-project/cfn_template/ac-pkg-phase3-qic-stack.yaml'
-      Parameters:
-        AssistantId: !Select [1, !Split ['assistant/', !Ref QiCDomainArn]]  # AssistantIdを抽出
-        QicPrefix: !Ref 'AWS::StackName'
-
-  # 3. 3rd Party App Stack  
+        Region: !Ref Region
+        SelfServiceOrchestrationAIAgentArn: !GetAtt QiCAIAgentStack.Outputs.SelfServiceOrchestrationAIAgentArn
+        SelfServiceOrchestrationAIAgentName: !GetAtt QiCAIAgentStack.Outputs.SelfServiceOrchestrationAIAgentName
+        
+  # 5. 3rd Party App Stack  
   ThirdPartyAppStack:
     Type: AWS::CloudFormation::Stack
-    DependsOn: QiCAIAgentStack
+    DependsOn: ContactFlowStack
     Properties:
       TemplateURL: !Sub 'https://amazonconnect-${InstanceAlias}-app.s3.${AWS::Region}.amazonaws.com/amazon-connect-project/cfn_template/ac-pkg-phase3-app-stack.yaml'
       Parameters:
@@ -166,16 +150,26 @@ Resources:
         Region: !Ref Region
         ConnectInstanceArn: !Ref ConnectInstanceArn
         ApplicationName: !Ref ApplicationName
-        SecurityProfileName: !Ref SecurityProfileName
-        WebAclArn: !Ref CloudFrontWebAclARN
+        SecurityProfileName: 'CustomAgent'
+        WebACLName: !Sub '${AWS::StackName}-myapp-webacl'
+        Scope: 'CLOUDFRONT'
 
 Outputs:
-  ContactFlowStackId:
-    Value: !Ref ContactFlowStack
+  ConversationalBotStack:
+    Description: 'ID of the ConversationalBot Stack'
+    Value: !Ref ConversationalBotStack
 
-  QiCAIAgentStackId:
-    Description: 'ID of the QiC AI Agent Stack'
+  CasesTemplateStack:
+    Description: 'ID of the CasesTemplate Stack'
+    Value: !Ref CasesTemplateStack
+
+  ConnectAIagentsStackId:
+    Description: 'ID of the Connect AI agents Stack'
     Value: !Ref QiCAIAgentStack
+
+  ContactFlowStackId:
+    Description: 'ID of the ConnectFlow Stack'
+    Value: !Ref ContactFlowStack
 
   ThirdPartyAppStackId:
     Description: 'ID of the Third Party App Stack'

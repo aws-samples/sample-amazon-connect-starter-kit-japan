@@ -1,5 +1,5 @@
 AWSTemplateFormatVersion: '2010-09-09'
-Description: 'Amazon Connect Instance with Customer Profiles and Q in Connect Assistant'
+Description: 'Amazon Connect Instance with Customer Profiles and Amazon Connect AI agent'
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -11,12 +11,12 @@ Metadata:
           - InstanceAlias
           - ExistingInstanceId
       - Label:
-          default: "Q in Connect Configuration"
+          default: "Amazon Connect AI agents Configuration"
         Parameters:
-          - EnableQinConnect
+          - EnableAmazonConnectAIagents
     ParameterLabels:
-      EnableQinConnect:
-        default: "Enable Q in Connect Assistant"
+      EnableAmazonConnectAIagents:
+        default: "Enable Amazon Connect AI agents"
 
 Parameters:
   CreateNewInstance:
@@ -39,13 +39,13 @@ Parameters:
     Description: 'Existing Connect instance ID (required if not creating a new Amazon Connect instance)'
     Default: ''
 
-  EnableQinConnect:
+  EnableAmazonConnectAIagents:
     Type: String
     AllowedValues: 
       - 'Yes'
       - 'No'
     Default: 'Yes'
-    Description: 'Enable or disable Q in Connect Assistant creation. If you select No, you will need to use an existing QiC domain or create a QiC domain manually.'
+    Description: 'Enable or disable Connect AI agents domain creation. If you select No, you will need to use an existing Connect AI agents domain or create a Connect AI agents domain manually.'
 
 Rules:
   ValidateInstanceAlias:
@@ -69,7 +69,7 @@ Conditions:
     - !Ref CreateNewInstance
     - 'Yes'
   CreateAssistantResources: !Equals 
-    - !Ref EnableQinConnect
+    - !Ref EnableAmazonConnectAIagents
     - 'Yes'
 
 Resources:
@@ -140,12 +140,12 @@ Resources:
         - Key: Purpose
           Value: ConnectPackage
 
-  # Amazon Q in Conncect ナレッジソース用のS3バケット作成
-  ConnectS3BucketQiC:
+  # Amazon Connect AI agents ナレッジソース用のS3バケット作成
+  ConnectS3BucketAIagents:
     Type: AWS::S3::Bucket
     Condition: CreateAssistantResources
     Properties:
-      BucketName: !Sub 'amazonconnect-${InstanceAlias}-qic'
+      BucketName: !Sub 'amazonconnect-${InstanceAlias}-aiagents'
       PublicAccessBlockConfiguration:
         BlockPublicAcls: true
         BlockPublicPolicy: true
@@ -159,10 +159,10 @@ Resources:
         Status: Enabled
       LoggingConfiguration:
         DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: connect-qic-bucket-logs/
+        LogFilePrefix: connect-aiagents-bucket-logs/
       Tags:
         - Key: Purpose
-          Value: Amazon Q in Connect Knowledge Source
+          Value: Amazon Connect AI agents Knowledge Source
 
   # ロギング用バケットのポリシー
   LoggingBucketPolicy:
@@ -226,14 +226,14 @@ Resources:
             Action: 's3:GetObject'
             Resource: !Sub '${ConnectS3BucketApp.Arn}/*'
 
-  # QiC用S3バケットへのポリシー追加
+  # Connect AI agents 用S3バケットへのポリシー追加
   BucketPolicy:
     Type: AWS::S3::BucketPolicy
     Condition: CreateAssistantResources
     DependsOn:
-      - ConnectS3BucketQiC
+      - ConnectS3BucketAIagents
     Properties:
-      Bucket: !Ref ConnectS3BucketQiC
+      Bucket: !Ref ConnectS3BucketAIagents
       PolicyDocument:
         Version: '2012-10-17'
         Statement:
@@ -246,8 +246,8 @@ Resources:
               - s3:GetObject
               - s3:GetBucketLocation
             Resource:
-              - !Sub 'arn:aws:s3:::${ConnectS3BucketQiC}'
-              - !Sub 'arn:aws:s3:::${ConnectS3BucketQiC}/*'
+              - !Sub 'arn:aws:s3:::${ConnectS3BucketAIagents}'
+              - !Sub 'arn:aws:s3:::${ConnectS3BucketAIagents}/*'
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref 'AWS::AccountId'
@@ -369,24 +369,36 @@ Resources:
     Properties:
       DomainName: !If 
         - ShouldCreateNewInstance
-        - !Sub '${InstanceAlias}-domain'
-        - !Sub '${ExistingInstanceId}-domain'
+        - !Sub '${InstanceAlias}-profiles-domain'
+        - !Sub '${ExistingInstanceId}-profiles-domain'
       DefaultEncryptionKey: !GetAtt ConnectKMSKey.Arn
       DefaultExpirationDays: 730
       Tags: 
         - Key: "Environment"
           Value: "Production"
 
-  # Q in Connect Resources
+  # Cases Resources
+  AmazonConnectCases:
+    Type: AWS::Cases::Domain
+    Properties:
+      Name: !If 
+        - ShouldCreateNewInstance
+        - !Sub '${InstanceAlias}-cases-domain'
+        - !Sub '${ExistingInstanceId}-cases-domain'
+      Tags: 
+        - Key: "Environment"
+          Value: "Production"
+
+  # Amazon Connect AI agents Resources
   DataIntegration:
     Type: 'AWS::AppIntegrations::DataIntegration'
     Condition: CreateAssistantResources
     DependsOn:
       - CustomerProfiles
     Properties:
-      Name: !Sub 'qic-amazonconnect-${InstanceAlias}'
+      Name: !Sub 'aiagents-amazonconnect-${InstanceAlias}'
       KmsKey: !GetAtt ConnectKMSKey.Arn
-      SourceURI: !Sub 's3://${ConnectS3BucketQiC}'
+      SourceURI: !Sub 's3://${ConnectS3BucketAIagents}'
 
   KnowledgeBase:
     Type: 'AWS::Wisdom::KnowledgeBase'
@@ -395,7 +407,7 @@ Resources:
       - DataIntegration
       - CustomerProfiles
     Properties:
-      Name: !Sub 'qic-amazonconnect-${InstanceAlias}'
+      Name: !Sub 'aiagents-amazonconnect-${InstanceAlias}'
       KnowledgeBaseType: EXTERNAL
       Tags:
         - Key: AmazonConnectEnabled
@@ -412,9 +424,9 @@ Resources:
     DependsOn:
       - CustomerProfiles
     Properties:
-      Name: !Sub 'qic-amazonconnect-${InstanceAlias}'
+      Name: !Sub 'aiagents-amazonconnect-${InstanceAlias}'
       Type: AGENT
-      Description: 'Q in Connect Assistant created via CloudFormation'
+      Description: 'Connect AI agents domain created via CloudFormation'
 
   AssistantAssociation:
     Type: 'AWS::Wisdom::AssistantAssociation'
@@ -436,47 +448,10 @@ Outputs:
       - !GetAtt ConnectInstance.Arn
       - !Sub 'arn:aws:connect:${AWS::Region}:${AWS::AccountId}:instance/${ExistingInstanceId}'
 
-  CustomerProfilesDomainName:
-    Description: The name of the Customer Profiles domain
-    Value: !Ref CustomerProfiles
-
-  AssistantId:
+  ConnectAIagentsDomainArn:
     Condition: CreateAssistantResources
-    Description: 'ID of the created Q in Connect Assistant'
-    Value: !Ref Assistant
-  
-  AssistantArn:
-    Condition: CreateAssistantResources
-    Description: 'ARN of the created Q in Connect Assistant'
+    Description: 'ARN of the created Connect AI agents domain'
     Value: !GetAtt Assistant.AssistantArn
-  
-  AssistantAssociationId:
-    Condition: CreateAssistantResources
-    Description: 'ID of the created Assistant Association'
-    Value: !Ref AssistantAssociation
-  
-  KnowledgeBaseId:
-    Condition: CreateAssistantResources
-    Description: 'ID of the created Knowledge Base'
-    Value: !Ref KnowledgeBase
-  
-  DataIntegrationArn:
-    Condition: CreateAssistantResources
-    Description: 'ARN of the created Data Integration'
-    Value: !GetAtt DataIntegration.DataIntegrationArn
-  
-  KMSKeyId:
-    Description: 'ID of the KMS key'
-    Value: !Ref ConnectKMSKey
-  
-  KMSKeyArn:
-    Description: 'ARN of the KMS key'
-    Value: !GetAtt ConnectKMSKey.Arn
-
-  QiCBucketPolicyArn:
-    Condition: CreateAssistantResources
-    Description: 'ARN of the bucket policy'
-    Value: !Sub 'arn:aws:s3:::${ConnectS3BucketQiC}/policy'
 
   PhoneNumber:
     Condition: ShouldCreateNewInstance
@@ -492,7 +467,53 @@ Outputs:
     Description: 'Name of the S3 bucket for Connect Package'
     Value: !Ref ConnectS3BucketApp
 
-  ConnectQiCS3BucketName:
+  ConnectAIagentsS3BucketName:
     Condition: CreateAssistantResources
-    Description: 'Name of the S3 bucket for Q in Connect'
-    Value: !Ref ConnectS3BucketQiC
+    Description: 'Name of the S3 bucket for Connect AI agents'
+    Value: !Ref ConnectS3BucketAIagents
+
+  CasesDomainId:
+    Description: The Id of the Cases domain
+    Value: !GetAtt AmazonConnectCases.DomainId
+
+#  CustomerProfilesDomainName:
+#    Description: The name of the Customer Profiles domain
+#    Value: !Ref CustomerProfiles
+
+#  CasesDomainName:
+#    Description: The name of the Cases domain
+#    Value: !Ref AmazonConnectCases
+
+#  AssistantId:
+#    Condition: CreateAssistantResources
+#    Description: 'ID of the created Connect AI agents Assistant'
+#    Value: !Ref Assistant
+    
+#  AssistantAssociationId:
+#    Condition: CreateAssistantResources
+#    Description: 'ID of the created Assistant Association'
+#    Value: !Ref AssistantAssociation
+  
+#  KnowledgeBaseId:
+#    Condition: CreateAssistantResources
+#    Description: 'ID of the created Knowledge Base'
+#    Value: !Ref KnowledgeBase
+  
+#  DataIntegrationArn:
+#    Condition: CreateAssistantResources
+#    Description: 'ARN of the created Data Integration'
+#    Value: !GetAtt DataIntegration.DataIntegrationArn
+  
+#  KMSKeyId:
+#    Description: 'ID of the KMS key'
+#    Value: !Ref ConnectKMSKey
+  
+#  KMSKeyArn:
+#    Description: 'ARN of the KMS key'
+#    Value: !GetAtt ConnectKMSKey.Arn
+
+#  ConnectAIagentsBucketPolicyArn:
+#    Condition: CreateAssistantResources
+#    Description: 'ARN of the bucket policy'
+#    Value: !Sub 'arn:aws:s3:::${ConnectS3BucketAIagents}/policy'
+

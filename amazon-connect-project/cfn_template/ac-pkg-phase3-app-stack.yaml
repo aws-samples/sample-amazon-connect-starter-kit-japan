@@ -27,16 +27,7 @@ Parameters:
     Default: ap-northeast-1
     AllowedValues:
       - ap-northeast-1
-      - ap-northeast-2
-      - ap-northeast-3
-      - ap-southeast-1
-      - ap-southeast-2
       - us-east-1
-      - us-east-2
-      - us-west-1
-      - us-west-2
-      - eu-west-1
-      - eu-central-1
 
   # Connect Parameters
   ConnectInstanceArn:
@@ -56,12 +47,436 @@ Parameters:
     Description: 'Name of new security profile'
     Default: 'CustomAgent'
 
-  WebAclArn:
+  WebACLName:
     Type: String
-    Description: ARN of the WAF Web ACL (must be created in us-east-1)
-    Default: 'arn:aws:wafv2:us-east-1:111122223333:global/webacl/myapp-webacl/xxxx'
+    Description: Name suffix of the WAF WebACL (will be prefixed with stack name)
+    Default: 'myapp-webacl'
+
+  Scope:
+    Type: String
+    Default: CLOUDFRONT
+    AllowedValues:
+      - CLOUDFRONT
+      - REGIONAL
+    Description: Scope of the WebACL (CLOUDFRONT for CloudFront, REGIONAL for ALB/API Gateway)
+
+  IPv4AllowList:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: Can be left blank. Comma-separated list of IPv4 CIDR blocks to allow (e.g., 192.0.2.0/24,198.51.100.0/24)
+
+  IPv6AllowList:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: Can be left blank. Comma-separated list of IPv6 CIDR blocks to allow
+
+  IPv4BlockList:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: Can be left blank. Comma-separated list of IPv4 CIDR blocks to block
+
+  IPv6BlockList:
+    Type: CommaDelimitedList
+    Default: ''
+    Description: Can be left blank. Comma-separated list of IPv6 CIDR blocks to block
+
+Conditions:
+  HasIPv4Allow: !Not [!Equals [!Join ['', !Ref IPv4AllowList], '']]
+  HasIPv6Allow: !Not [!Equals [!Join ['', !Ref IPv6AllowList], '']]
+  HasIPv4Block: !Not [!Equals [!Join ['', !Ref IPv4BlockList], '']]
+  HasIPv6Block: !Not [!Equals [!Join ['', !Ref IPv6BlockList], '']]
 
 Resources:
+  # 0. WAF Resources
+  # IPv4 Allow IP Set
+  IPv4AllowIPSet:
+    Type: AWS::WAFv2::IPSet
+    Condition: HasIPv4Allow
+    Properties:
+      Name: !Sub '${WebACLName}_IPV4_Allow'
+      Scope: !Ref Scope
+      IPAddressVersion: IPV4
+      Addresses: !Ref IPv4AllowList
+
+  # IPv6 Allow IP Set
+  IPv6AllowIPSet:
+    Type: AWS::WAFv2::IPSet
+    Condition: HasIPv6Allow
+    Properties:
+      Name: !Sub '${WebACLName}_IPV6_Allow'
+      Scope: !Ref Scope
+      IPAddressVersion: IPV6
+      Addresses: !Ref IPv6AllowList
+
+  # IPv4 Block IP Set
+  IPv4BlockIPSet:
+    Type: AWS::WAFv2::IPSet
+    Condition: HasIPv4Block
+    Properties:
+      Name: !Sub '${WebACLName}_IPV4_Block'
+      Scope: !Ref Scope
+      IPAddressVersion: IPV4
+      Addresses: !Ref IPv4BlockList
+
+  # IPv6 Block IP Set
+  IPv6BlockIPSet:
+    Type: AWS::WAFv2::IPSet
+    Condition: HasIPv6Block
+    Properties:
+      Name: !Sub '${WebACLName}_IPV6_Block'
+      Scope: !Ref Scope
+      IPAddressVersion: IPV6
+      Addresses: !Ref IPv6BlockList
+
+  # WAF WebACL
+  WebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub '${WebACLName}'
+      Scope: !Ref Scope
+      Description: !Sub 'WAF WebACL for ${WebACLName}'
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        SampledRequestsEnabled: true
+        CloudWatchMetricsEnabled: true
+        MetricName: !Sub '${WebACLName}'
+      Rules:
+        # Rule 0: AWS Managed Anti-DDoS Rule Set
+        - Name: AWS-AWSManagedRulesAntiDDoSRuleSet
+          Priority: 0
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWS-AWSManagedRulesAntiDDoSRuleSet
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAntiDDoSRuleSet
+              ManagedRuleGroupConfigs:
+                - AWSManagedRulesAntiDDoSRuleSet:
+                    ClientSideActionConfig:
+                      Challenge:
+                        UsageOfAction: ENABLED
+                        Sensitivity: HIGH
+                        ExemptUriRegularExpressions:
+                          - RegexString: '\/api\/|\\.(acc|avi|css|gif|ico|jpe?g|js|json|mp[34]|ogg|otf|pdf|png|tiff?|ttf|webm|webp|woff2?|xml)$'
+                    SensitivityToBlock: LOW
+
+        # Rule 1: IPv4 Allow List
+        - !If
+          - HasIPv4Allow
+          - Name: !Sub '${WebACLName}_IPV4_Allow'
+            Priority: 1
+            Action:
+              Allow: {}
+            VisibilityConfig:
+              SampledRequestsEnabled: true
+              CloudWatchMetricsEnabled: true
+              MetricName: !Sub '${WebACLName}_IPV4_Allow'
+            Statement:
+              IPSetReferenceStatement:
+                Arn: !GetAtt IPv4AllowIPSet.Arn
+          - !Ref AWS::NoValue
+
+        # Rule 2: IPv6 Allow List
+        - !If
+          - HasIPv6Allow
+          - Name: !Sub '${WebACLName}_IPV6_Allow'
+            Priority: 2
+            Action:
+              Allow: {}
+            VisibilityConfig:
+              SampledRequestsEnabled: true
+              CloudWatchMetricsEnabled: true
+              MetricName: !Sub '${WebACLName}_IPV6_Allow'
+            Statement:
+              IPSetReferenceStatement:
+                Arn: !GetAtt IPv6AllowIPSet.Arn
+          - !Ref AWS::NoValue
+
+        # Rule 3: IPv4 Block List
+        - !If
+          - HasIPv4Block
+          - Name: !Sub '${WebACLName}_IPV4_Block'
+            Priority: 3
+            Action:
+              Block: {}
+            VisibilityConfig:
+              SampledRequestsEnabled: true
+              CloudWatchMetricsEnabled: true
+              MetricName: !Sub '${WebACLName}_IPV4_Block'
+            Statement:
+              IPSetReferenceStatement:
+                Arn: !GetAtt IPv4BlockIPSet.Arn
+          - !Ref AWS::NoValue
+
+        # Rule 4: IPv6 Block List
+        - !If
+          - HasIPv6Block
+          - Name: !Sub '${WebACLName}_IPV6_Block'
+            Priority: 4
+            Action:
+              Block: {}
+            VisibilityConfig:
+              SampledRequestsEnabled: true
+              CloudWatchMetricsEnabled: true
+              MetricName: !Sub '${WebACLName}_IPV6_Block'
+            Statement:
+              IPSetReferenceStatement:
+                Arn: !GetAtt IPv6BlockIPSet.Arn
+          - !Ref AWS::NoValue
+
+        # Rule 5: Geo Blocking
+        - Name: GeoRule
+          Priority: 5
+          Action:
+            Block: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: GeoRule
+          Statement:
+            GeoMatchStatement:
+              CountryCodes:
+                - CU  # Cuba
+                - IR  # Iran
+                - KP  # North Korea
+                - RU  # Russia
+                - SY  # Syria
+                - VE  # Venezuela
+
+        # Rule 6: Global Rate Limit
+        - Name: GlobalRateBasedRule
+          Priority: 6
+          Action:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: GlobalRateBasedRule
+          Statement:
+            RateBasedStatement:
+              Limit: 1000
+              AggregateKeyType: IP
+              EvaluationWindowSec: 300
+
+        # Rule 7: Rate Limit for GET requests
+        - Name: RateBasedRuleGET
+          Priority: 7
+          Action:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateBasedRuleGET
+          Statement:
+            RateBasedStatement:
+              Limit: 500
+              AggregateKeyType: IP
+              EvaluationWindowSec: 300
+              ScopeDownStatement:
+                ByteMatchStatement:
+                  SearchString: GET
+                  FieldToMatch:
+                    Method: {}
+                  TextTransformations:
+                    - Priority: 0
+                      Type: NONE
+                  PositionalConstraint: EXACTLY
+
+        # Rule 8: Rate Limit for POST/PUT/DELETE requests
+        - Name: RateBasedRulePOST
+          Priority: 8
+          Action:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: RateBasedRulePOST
+          Statement:
+            RateBasedStatement:
+              Limit: 100
+              AggregateKeyType: IP
+              EvaluationWindowSec: 300
+              ScopeDownStatement:
+                OrStatement:
+                  Statements:
+                    - ByteMatchStatement:
+                        SearchString: POST
+                        FieldToMatch:
+                          Method: {}
+                        TextTransformations:
+                          - Priority: 0
+                            Type: NONE
+                        PositionalConstraint: EXACTLY
+                    - ByteMatchStatement:
+                        SearchString: PUT
+                        FieldToMatch:
+                          Method: {}
+                        TextTransformations:
+                          - Priority: 0
+                            Type: NONE
+                        PositionalConstraint: EXACTLY
+                    - ByteMatchStatement:
+                        SearchString: DELETE
+                        FieldToMatch:
+                          Method: {}
+                        TextTransformations:
+                          - Priority: 0
+                            Type: NONE
+                        PositionalConstraint: EXACTLY
+
+        # Rule 9: Body Size Restriction
+        - Name: BodySizeRestrictionRule
+          Priority: 9
+          Action:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: BodySizeRestrictionRule
+          Statement:
+            SizeConstraintStatement:
+              FieldToMatch:
+                Body:
+                  OversizeHandling: MATCH
+              ComparisonOperator: GT
+              Size: 16384
+              TextTransformations:
+                - Priority: 0
+                  Type: NONE
+
+        # Rule 10: AWS Managed IP Reputation List
+        - Name: AWS-AWSManagedRulesAmazonIpReputationList
+          Priority: 10
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWS-AWSManagedRulesAmazonIpReputationList
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAmazonIpReputationList
+              RuleActionOverrides:
+                - Name: AWSManagedReconnaissanceList
+                  ActionToUse:
+                    Count: {}
+                - Name: AWSManagedIPDDoSList
+                  ActionToUse:
+                    Block: {}
+
+        # Rule 11: Rate Limit for DDoS IPs
+        - Name: ManagedIPDDoSRateLimit
+          Priority: 11
+          Action:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: ManagedIPDDoSRateLimit
+          Statement:
+            RateBasedStatement:
+              Limit: 1000
+              AggregateKeyType: IP
+              EvaluationWindowSec: 300
+              ScopeDownStatement:
+                LabelMatchStatement:
+                  Scope: LABEL
+                  Key: awswaf:managed:aws:amazon-ip-list:AWSManagedIPDDoSList
+
+        # Rule 12: AWS Managed Anonymous IP List
+        - Name: AWS-AWSManagedRulesAnonymousIpList
+          Priority: 12
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWS-AWSManagedRulesAnonymousIpList
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesAnonymousIpList
+
+        # Rule 13: AWS Managed Common Rule Set
+        - Name: AWS-AWSManagedRulesCommonRuleSet
+          Priority: 13
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWS-AWSManagedRulesCommonRuleSet
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+
+        # Rule 14: AWS Managed Known Bad Inputs Rule Set
+        - Name: AWS-AWSManagedRulesKnownBadInputsRuleSet
+          Priority: 14
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWS-AWSManagedRulesKnownBadInputsRuleSet
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+
+        # Rule 15: AWS Managed SQLi Rule Set
+        - Name: AWS-AWSManagedRulesSQLiRuleSet
+          Priority: 15
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWS-AWSManagedRulesSQLiRuleSet
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+
+        # Rule 16: AWS Managed Linux Rule Set
+        - Name: AWS-AWSManagedRulesLinuxRuleSet
+          Priority: 16
+          OverrideAction:
+            None: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWS-AWSManagedRulesLinuxRuleSet
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesLinuxRuleSet
+
+        # Rule 17: AWS Managed Bot Control Rule Set
+        - Name: AWS-AWSManagedRulesBotControlRuleSet
+          Priority: 17
+          OverrideAction:
+            Count: {}
+          VisibilityConfig:
+            SampledRequestsEnabled: true
+            CloudWatchMetricsEnabled: true
+            MetricName: AWS-AWSManagedRulesBotControlRuleSet
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesBotControlRuleSet
+              ManagedRuleGroupConfigs:
+                - AWSManagedRulesBotControlRuleSet:
+                    InspectionLevel: COMMON
+
+
   # 1. CloudFront Resources
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
@@ -104,7 +519,7 @@ Resources:
         ViewerCertificate:
           MinimumProtocolVersion: TLSv1.2_2021
           CloudFrontDefaultCertificate: true
-        WebACLId: !Ref WebAclArn
+        WebACLId: !GetAtt WebACL.Arn
 
   BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -199,8 +614,13 @@ Resources:
         - "RealtimeContactLens.View"
         - "OutboundCallAccess"
         - "AudioDeviceSettings.Access"
+        - "Analytics.PerformanceMetrics.Access"
 
 Outputs:
+  WebACLArn:
+    Description: The ARN of the WAF WebACL
+    Value: !GetAtt WebACL.Arn
+
   CloudFrontDomainName:
     Description: 'Domain name of CloudFront distribution'
     Value: !GetAtt CloudFrontDistribution.DomainName

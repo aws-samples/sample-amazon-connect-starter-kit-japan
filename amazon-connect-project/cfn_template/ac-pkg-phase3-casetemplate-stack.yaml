@@ -1,0 +1,157 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Amazon Connect Cases - フィールドとテンプレートの自動設定'
+
+Parameters:
+  CasesDomainId:
+    Type: String
+    Description: 'Amazon Connect Cases ドメインID'
+    MinLength: 1
+
+  CasesTemplateName:
+    Type: String
+    Description: 'Amazon Connect Cases Template名'
+
+Resources:
+  # Lambda実行ロール
+  CasesCustomResourceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      Policies:
+        - PolicyName: CasesFieldOptionsPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - cases:BatchPutFieldOptions
+                  - cases:ListFieldOptions
+                  - cases:ListFields
+                Resource: 
+                  - !Sub 'arn:aws:cases:${AWS::Region}:${AWS::AccountId}:domain/${CasesDomainId}'
+                  - !Sub 'arn:aws:cases:${AWS::Region}:${AWS::AccountId}:domain/${CasesDomainId}/*'
+
+  # Lambda関数 - フィールドオプション設定用
+  CasesFieldOptionsFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub '${AWS::StackName}-CasesFieldOptions'
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt CasesCustomResourceRole.Arn
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import json
+          import boto3
+          import cfnresponse
+          
+          cases_client = boto3.client('connectcases')
+          
+          def handler(event, context):
+              print(f"Event: {json.dumps(event)}")
+              
+              try:
+                  request_type = event['RequestType']
+                  domain_id = event['ResourceProperties']['DomainId']
+                  field_id = event['ResourceProperties']['FieldId']
+                  options = event['ResourceProperties']['Options']
+                  
+                  print(f"RequestType: {request_type}")
+                  print(f"DomainId: {domain_id}")
+                  print(f"FieldId: {field_id}")
+                  print(f"Options: {json.dumps(options)}")
+                  
+                  if request_type in ['Create', 'Update']:
+                      print(f"Calling batch_put_field_options")
+                      
+                      # CloudFormationから渡されたoptionsのactiveを文字列からboolに変換
+                      converted_options = []
+                      for opt in options:
+                          converted_opt = {
+                              'name': opt['name'],
+                              'value': opt['value'],
+                              'active': opt['active'] if isinstance(opt['active'], bool) else opt['active'].lower() == 'true'
+                          }
+                          converted_options.append(converted_opt)
+                      
+                      print(f"Converted options: {json.dumps(converted_options)}")
+                      
+                      # フィールドオプションを追加
+                      response = cases_client.batch_put_field_options(
+                          domainId=domain_id,
+                          fieldId=field_id,
+                          options=converted_options
+                      )
+                      
+                      print(f"API Response: {json.dumps(response, default=str)}")
+                      
+                      if response.get('errors'):
+                          error_msg = f"API returned errors: {json.dumps(response['errors'])}"
+                          print(f"ERROR: {error_msg}")
+                          cfnresponse.send(event, context, cfnresponse.FAILED, 
+                                         {'Error': error_msg})
+                          return
+                      
+                      print("SUCCESS: Field options added successfully")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, 
+                                     {'FieldId': field_id})
+                  
+                  elif request_type == 'Delete':
+                      # 削除時は何もしない（オプションは残す）
+                      print("Delete request - no action taken")
+                      cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+                  
+              except Exception as e:
+                  error_msg = f"Exception: {str(e)}"
+                  print(f"ERROR: {error_msg}")
+                  import traceback
+                  traceback.print_exc()
+                  cfnresponse.send(event, context, cfnresponse.FAILED, 
+                                 {'Error': error_msg})
+
+  # システムデフォルトの「理由」フィールドにオプションを追加
+  ReasonFieldOptions:
+    Type: Custom::CasesFieldOptions
+    Properties:
+      ServiceToken: !GetAtt CasesFieldOptionsFunction.Arn
+      DomainId: !Ref CasesDomainId
+      FieldId: 'case_reason'  # システムデフォルトの理由フィールドID
+      Options:
+        - name: '問い合わせ'
+          value: 'inquiry'
+          active: true
+        - name: '放棄呼'
+          value: 'abandoned_call'
+          active: true
+
+  # ケーステンプレート
+  StandardCaseTemplate:
+    Type: AWS::Cases::Template
+    DependsOn: ReasonFieldOptions
+    Properties:
+      Name: !Ref CasesTemplateName
+      Description: '標準的なケース管理用のテンプレート'
+      DomainId: !Ref CasesDomainId
+      Status: Active
+
+Outputs:
+  TemplateId:
+    Description: '作成されたケーステンプレートID'
+    Value: !GetAtt StandardCaseTemplate.TemplateId
+  
+  TemplateArn:
+    Description: 'ケーステンプレートARN'
+    Value: !GetAtt StandardCaseTemplate.TemplateArn
+  
+  LambdaFunctionArn:
+    Description: 'カスタムリソース用Lambda関数ARN'
+    Value: !GetAtt CasesFieldOptionsFunction.Arn

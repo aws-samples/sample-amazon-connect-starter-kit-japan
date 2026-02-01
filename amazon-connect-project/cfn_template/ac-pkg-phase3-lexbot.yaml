@@ -1,0 +1,130 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: "Lex Bot for Amazon Q in Connect - Created after QiCAssistant to avoid circular dependencies"
+
+Parameters:
+  ConnectInstanceArn:
+    Type: String
+    Description: Amazon Connect Instance ARN
+
+  QiCAssistantArn:
+    Type: String
+    Description: Amazon Q in Connect Assistant ARN
+
+  QiCAssistantId:
+    Type: String
+    Description: Amazon Q in Connect Assistant ID
+
+  LexBotName:
+    Type: String
+    Description: Name of the Lex bot for Amazon Q in Connect
+    Default: sample-lex-aiagents
+
+  LexBotAliasName:
+    Type: String
+    Description: Name of the Lex bot alias
+    Default: sample-lex-aiagents1-demo
+
+Resources:
+  # Note: Using Amazon Connect's service-linked role for Lex V2 bots
+  # This allows Amazon Connect AI agent features to work properly
+  # The service-linked role is automatically created when enabling Lex Bot Management in Amazon Connect
+
+  # Lex V2 Bot for Orchestration AI Agent
+  QiCLexBotOrchestration:
+    Type: AWS::Lex::Bot
+    Properties:
+      Name: !Sub "${LexBotName}-orchestration"
+      Description: "Lex bot for Orchestration AI Agent"
+      RoleArn: !Sub "arn:aws:iam::${AWS::AccountId}:role/aws-service-role/lexv2.amazonaws.com/AWSServiceRoleForLexV2Bots_AmazonConnect_${AWS::AccountId}"
+      DataPrivacy:
+        ChildDirected: false
+      IdleSessionTTLInSeconds: 300
+      AutoBuildBotLocales: true
+      BotLocales:
+        - LocaleId: ja_JP
+          Description: "Japanese locale for Orchestration bot"
+          NluConfidenceThreshold: 0.4
+          VoiceSettings:
+            VoiceId: Kazuha
+          Intents:
+            - Name: "AmazonQinConnectOrchestration"
+              Description: "This intent leverages Amazon Q in Connect Orchestration to fulfill requests or tasks."
+              ParentIntentSignature: "AMAZON.QInConnectIntent"
+              QInConnectIntentConfiguration:
+                QInConnectAssistantConfiguration:
+                  AssistantArn: !Ref QiCAssistantArn
+            - Name: "FallbackIntent"
+              Description: "Default fallback intent"
+              ParentIntentSignature: "AMAZON.FallbackIntent"
+      BotTags:
+        - Key: AmazonConnectEnabled
+          Value: "True"
+
+  # Orchestration Lex Bot Version
+  QiCLexBotOrchestrationVersion:
+    Type: AWS::Lex::BotVersion
+    DependsOn: QiCLexBotOrchestration
+    Properties:
+      BotId: !Ref QiCLexBotOrchestration
+      BotVersionLocaleSpecification:
+        - LocaleId: ja_JP
+          BotVersionLocaleDetails:
+            SourceBotVersion: DRAFT
+      Description: "Orchestration Bot version with Connect AI Agents integration for ja_JP"
+
+  # Orchestration Lex Bot Alias
+  QiCLexBotOrchestrationAlias:
+    Type: AWS::Lex::BotAlias
+    DependsOn: QiCLexBotOrchestrationVersion
+    Properties:
+      BotId: !Ref QiCLexBotOrchestration
+      BotAliasName: !Ref LexBotAliasName
+      BotVersion: !GetAtt QiCLexBotOrchestrationVersion.BotVersion
+      Description: "Orchestration Bot alias for Amazon Connect"
+      BotAliasLocaleSettings:
+        - LocaleId: ja_JP
+          BotAliasLocaleSetting:
+            Enabled: true
+      BotAliasTags:
+        - Key: AmazonConnectEnabled
+          Value: "True"
+
+  # Orchestration Lex Bot Integration with Amazon Connect
+  LexBotOrchestrationIntegration:
+    Type: AWS::Connect::IntegrationAssociation
+    DependsOn: QiCLexBotOrchestrationAlias
+    Properties:
+      InstanceId: !Ref ConnectInstanceArn
+      IntegrationArn: !GetAtt QiCLexBotOrchestrationAlias.Arn
+      IntegrationType: LEX_BOT
+
+Outputs:
+  OrchestrationLexBotName:
+    Description: Orchestration Lex Bot Name
+    Value: !Sub "${LexBotName}-orchestration"
+    Export:
+      Name: !Sub "${AWS::StackName}-OrchestrationLexBotName"
+
+  OrchestrationLexBotId:
+    Description: Orchestration Lex Bot ID
+    Value: !Ref QiCLexBotOrchestration
+    Export:
+      Name: !Sub "${AWS::StackName}-OrchestrationLexBotId"
+
+  OrchestrationLexBotAliasArn:
+    Description: Orchestration Lex Bot Alias ARN
+    Value: !GetAtt QiCLexBotOrchestrationAlias.Arn
+    Export:
+      Name: !Sub "${AWS::StackName}-OrchestrationLexBotAliasArn"
+
+  OrchestrationLexBotAliasId:
+    Description: Orchestration Lex Bot Alias ID
+    Value: !GetAtt QiCLexBotOrchestrationAlias.BotAliasId
+    Export:
+      Name: !Sub "${AWS::StackName}-OrchestrationLexBotAliasId"
+
+  OrchestrationLexBotIntegrationId:
+    Description: Orchestration Lex Bot Integration Association ID
+    Value: !Ref LexBotOrchestrationIntegration
+    Export:
+      Name: !Sub "${AWS::StackName}-OrchestrationLexBotIntegrationId"
