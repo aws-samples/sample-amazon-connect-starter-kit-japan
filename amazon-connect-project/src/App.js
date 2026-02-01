@@ -37,7 +37,7 @@ const connectApp = AmazonConnectApp.init({
     console.log('App initialized: ', appInstanceId);
     voiceClientInstance = new VoiceClient();
     applyConnectTheme();
-
+    
     // 追加: アプリ作成時に初期化処理を行う
     if (initializeAppState) {
       await initializeAppState();
@@ -83,13 +83,11 @@ function App() {
     return `${countryCode}${phoneNumber}`;
   };
 
-  // 修正: fetchContactData関数
-  async function fetchContactData() {
+  // 修正: fetchContactData関数（contactIdをパラメータで受け取る）
+  async function fetchContactData(contactId) {
     try {
-      const initialContactId = await contactClient.getInitialContactId(AppContactScope.CurrentContactId);
-      console.log('Initial Contact ID:', initialContactId);
-
-      if (!initialContactId) {
+      if (!contactId) {
+        console.log('[fetchContactData] No contactId provided');
         setContactInfo({
           id: '-',
           channelType: 'No active contact',
@@ -100,52 +98,83 @@ function App() {
         return;
       }
 
-      const type = await contactClient.getType(AppContactScope.CurrentContactId);
-      console.log('Contact type:', type);
+      console.log(`[fetchContactData] Fetching data for contact: ${contactId}`);
 
-      let phoneNumber = 'N/A';
-      let queueName = 'N/A';
-
+      // チャネルタイプを取得
+      let type = 'unknown';
       try {
-        if (type === 'voice' && voiceClientInstance) {
-          const voicePhoneNumber = await voiceClientInstance.getPhoneNumber(AppContactScope.CurrentContactId);
-          console.log('Voice phone number:', voicePhoneNumber);
-          phoneNumber = voicePhoneNumber || 'N/A';
-
-          try {
-            const queueDetails = await contactClient.getQueue(AppContactScope.CurrentContactId);
-            console.log('Queue details:', queueDetails);
-            queueName = queueDetails?.name || 'N/A';
-          } catch (queueError) {
-            console.error('Error fetching queue:', queueError);
-          }
+        const channelType = await contactClient.getChannelType(contactId);
+        console.log(`[fetchContactData] Raw channel type:`, channelType);
+        
+        // チャネルタイプが文字列かオブジェクトかを判定
+        if (typeof channelType === 'string') {
+          type = channelType;
+        } else if (channelType && typeof channelType === 'object') {
+          // オブジェクトの場合、type, name, valueなどのプロパティを確認
+          type = channelType.type || channelType.name || channelType.value || 'unknown';
         }
-      } catch (voiceError) {
-        console.error('Error fetching voice phone number:', voiceError);
+        console.log(`[fetchContactData] Parsed contact type: ${type}`);
+      } catch (typeError) {
+        console.error('[fetchContactData] Error fetching channel type:', typeError);
       }
 
+      let phoneNumber = '-';
+      let queueName = '-';
+
+      // キュー情報を取得（VoiceとChat両方で試行）
+      try {
+        const queueDetails = await contactClient.getQueue(contactId);
+        console.log('[fetchContactData] Queue details:', queueDetails);
+        queueName = queueDetails?.name || 'N/A';
+      } catch (queueError) {
+        console.error('[fetchContactData] Error fetching queue:', queueError);
+      }
+
+      // 電話番号を取得（複数の方法を試行）
+      // 方法1: VoiceClientから取得（AppContactScope.CurrentContactIdを使用）
+      if (type === 'voice' && voiceClientInstance) {
+        try {
+          console.log('[fetchContactData] Attempting to get phone number from VoiceClient with AppContactScope...');
+          const voicePhoneNumber = await voiceClientInstance.getPhoneNumber(AppContactScope.CurrentContactId);
+          console.log('[fetchContactData] Voice phone number from VoiceClient:', voicePhoneNumber);
+          if (voicePhoneNumber) {
+            phoneNumber = voicePhoneNumber;
+          }
+        } catch (voiceError) {
+          console.error('[fetchContactData] Error fetching voice phone number:', voiceError);
+        }
+      } else {
+        console.log(`[fetchContactData] Skipping VoiceClient (type: ${type}, voiceClientInstance: ${!!voiceClientInstance})`);
+      }
+
+      // 方法2: CustomerEndpoint属性から取得
       if (phoneNumber === 'N/A') {
         try {
+          console.log('[fetchContactData] Attempting to get CustomerEndpoint attribute...');
           const phoneAttr = await contactClient.getAttribute(
-            AppContactScope.CurrentContactId,
+            contactId,
             'CustomerEndpoint'
           );
-          if (phoneAttr?.value) phoneNumber = phoneAttr.value;
+          console.log('[fetchContactData] CustomerEndpoint attribute:', phoneAttr);
+          if (phoneAttr?.value) {
+            phoneNumber = phoneAttr.value;
+          }
         } catch (attrError) {
-          console.error('Error fetching contact attributes:', attrError);
+          console.error('[fetchContactData] Error fetching CustomerEndpoint attribute:', attrError);
         }
       }
 
+      console.log(`[fetchContactData] Final phone number: ${phoneNumber}`);
+
       setContactInfo({
-        id: initialContactId,
+        id: contactId,
         channelType: type || 'No active contact',
         phoneNumber: phoneNumber,
         queueName: queueName,
         timestamp: new Date().toLocaleString()
       });
-
     } catch (error) {
-      console.error('Error fetching contact data:', error);
+      console.error('[fetchContactData] Error:', error);
       setContactInfo({
         id: '-',
         channelType: 'No active contact',
@@ -156,37 +185,45 @@ function App() {
     }
   }
 
-  // 修正: fetchContactAttributes関数
-  const fetchContactAttributes = async () => {
+  // 修正: fetchContactAttributes関数（contactIdをパラメータで受け取る）
+  const fetchContactAttributes = async (contactId) => {
     try {
-      const initialContactId = await contactClient.getInitialContactId(AppContactScope.CurrentContactId);
-      
-      if (!initialContactId) {
+      if (!contactId) {
+        console.log('[fetchContactAttributes] No contactId provided');
         setContactAttributes({});
         setHasActiveContact(false);
         return;
       }
 
-      const type = await contactClient.getType(AppContactScope.CurrentContactId);
+      console.log(`[fetchContactAttributes] Fetching attributes for contact: ${contactId}`);
+
+      // チャネルタイプを取得
+      const type = await contactClient.getChannelType(contactId);
+      console.log(`[fetchContactAttributes] Contact type: ${type}`);
+
+      // 属性キーのリストを作成
+      const attributeKeys = Array.from(
+        { length: config.maxContactAttributes }, 
+        (_, i) => `Key${i + 1}`
+      );
+      console.log('[fetchContactAttributes] Requesting attributes:', attributeKeys);
+
+      // ContactClientのgetAttributesメソッドを使用（contactIdを直接指定）
+      const attributes = await contactClient.getAttributes(
+        contactId,
+        attributeKeys
+      );
+      console.log(`[${type}] Fetched contact attributes:`, attributes);
       
-      if (type === 'voice') {
-        const attributeKeys = Array.from(
-          { length: config.maxContactAttributes }, 
-          (_, i) => `Key${i + 1}`
-        );
-        const attributes = await contactClient.getAttributes(
-          AppContactScope.CurrentContactId,
-          attributeKeys
-        );
-        console.log('Fetched contact attributes:', attributes);
-        setContactAttributes(attributes || {});
-        setHasActiveContact(true);
-      } else {
-        setContactAttributes({});
-        setHasActiveContact(false);
-      }
+      setContactAttributes(attributes || {});
+      setHasActiveContact(true);
     } catch (error) {
-      console.error('Error fetching contact attributes:', error);
+      console.error('[fetchContactAttributes] Error:', error);
+      console.error('[fetchContactAttributes] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       setContactAttributes({});
       setHasActiveContact(false);
     }
@@ -214,7 +251,6 @@ function App() {
         routingProfile: routingProfile,
         timestamp: new Date().toLocaleString()
       }));
-
     } catch (error) {
       console.error('Error fetching agent data:', error);
       setStatus('Error processing agent info');
@@ -224,28 +260,30 @@ function App() {
   // 追加: initializeAppState関数の定義
   initializeAppState = async () => {
     try {
+      // 初期化時はAppContactScopeを使用してcontactIdを取得
       const initialContactId = await contactClient.getInitialContactId(AppContactScope.CurrentContactId);
       const status = await agentClient.getState();
-      console.log('Initializing app state, initial contact ID:', initialContactId);
+
+      console.log('[initializeAppState] Initial contact ID:', initialContactId);
 
       if (initialContactId) {
-        const type = await contactClient.getType(AppContactScope.CurrentContactId);
-        console.log('Current contact type:', type);
-        
-        if (type === 'voice') {
-          await fetchContactData();
-          await fetchContactAttributes();
-          setHasActiveContact(true);
+        const type = await contactClient.getChannelType(initialContactId);
+        console.log('[initializeAppState] Current contact type:', type);
 
-          // ステータスに応じてメッセージを変更するが、コンタクト情報は維持
-          if (status.name === 'AfterCallWork') {
-            setOutboundStatus('アフターコールワークを終了してください');
-          } else {
-            setOutboundStatus('通話中');
-          }
+        // Voice と Chat 両方に対応
+        await fetchContactData(initialContactId);
+        await fetchContactAttributes(initialContactId);
+        setHasActiveContact(true);
+
+        // ステータスに応じてメッセージを変更するが、コンタクト情報は維持
+        if (status.name === 'AfterCallWork') {
+          setOutboundStatus('アフターコールワークを終了してください');
+        } else {
+          // 一律「通話中」に設定
+          setOutboundStatus('通話中');
         }
-
       } else {
+        console.log('[initializeAppState] No active contact');
         setContactInfo({
           id: '-',
           channelType: 'No active contact',
@@ -258,7 +296,12 @@ function App() {
         setOutboundStatus('');
       }
     } catch (error) {
-      console.error('Error initializing app state:', error);
+      console.error('[initializeAppState] Error:', error);
+      console.error('[initializeAppState] Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       setContactInfo({
         id: '-',
         channelType: 'No active contact',
@@ -289,8 +332,8 @@ function App() {
     }
 
     const formattedNumber = formatPhoneNumber(countryCode, phoneNumberWithoutCode);
-
     const phoneNumberPattern = /^\+[1-9]\d{1,14}$/;
+
     if (!phoneNumberPattern.test(formattedNumber)) {
       setOutboundStatus('電話番号が正しい形式ではありません');
       return;
@@ -302,6 +345,7 @@ function App() {
         setOutboundStatus('発信できません: 発信権限がありません');
         return;
       }
+
       if (status.name === 'Busy') {
         setOutboundStatus('通話中');
       } else {
@@ -312,6 +356,7 @@ function App() {
       const outboundCallResult = await voiceClientInstance.createOutboundCall(formattedNumber, {
         queueARN: selectedQueueARN
       });
+
       setPhoneNumberWithoutCode('');
     } catch (error) {
       console.error('Outbound call error:', error);
@@ -337,17 +382,15 @@ function App() {
   };
 
   useEffect(() => {
-    loadConfig()
-      .then(configData => {
-        console.log('Config loaded:', configData);
-        setConfig(configData);
-        setCountryCode(configData.countryCode[0]?.value || '+81');
-        setLoading(false);
-      })
-      .catch(error => {
-        console.error('Failed to load config:', error);
-        setLoading(false);
-      });
+    loadConfig().then(configData => {
+      console.log('Config loaded:', configData);
+      setConfig(configData);
+      setCountryCode(configData.countryCode[0]?.value || '+81');
+      setLoading(false);
+    }).catch(error => {
+      console.error('Failed to load config:', error);
+      setLoading(false);
+    });
   }, []);
 
   useEffect(() => {
@@ -367,21 +410,51 @@ function App() {
       await fetchAgentData();
     };
 
-    const onConnectedHandler = async () => {
-      await contactHandler();
-      await fetchContactAttributes();
+    const onConnectedHandler = async (data) => {
+      console.log('[onConnected] Contact connected event fired, data:', data);
+      const contactId = data?.contactId;
+      
+      if (!contactId) {
+        console.error('[onConnected] No contactId in event data');
+        return;
+      }
+      
+      console.log('[onConnected] Contact ID:', contactId);
+      
+      // ステータスを一律「通話中」に設定
       setOutboundStatus('通話中');
+      
+      // コンタクト情報を取得
+      await fetchContactData(contactId);
+      await fetchAgentData();
+      
+      // コンタクト属性を取得
+      await fetchContactAttributes(contactId);
     };
 
-    const onDestroyedHandler = async () => {
-      await contactHandler();
+    const onDestroyedHandler = async (data) => {
+      console.log('[onDestroyed] Contact destroyed event fired, data:', data);
+      const contactId = data?.contactId;
+      
+      if (contactId) {
+        await fetchContactData(contactId);
+        await fetchAgentData();
+      }
+      
       setContactAttributes({});
       setHasActiveContact(false);
       setOutboundStatus('');
     };
 
-    const onStartingAcwHandler = async () => {
-      await contactHandler();
+    const onStartingAcwHandler = async (data) => {
+      console.log('[onStartingAcw] Starting ACW event fired, data:', data);
+      const contactId = data?.contactId;
+      
+      if (contactId) {
+        await fetchContactData(contactId);
+        await fetchAgentData();
+      }
+      
       setOutboundStatus('アフターコールワークを終了してください');
     };
 
@@ -521,41 +594,39 @@ function App() {
     );
   };
 
- const renderContactAttribute = (key) => {
-  const allowedKeys = Object.keys(config?.contactAttributes || {});
-  if (!allowedKeys.includes(key)) {
-    return null;
-  }
-  
-  return (
-    <div key={key}>
-      <Box variant="awsui-key-label">
-        <Box fontWeight="bold">{config?.contactAttributes[key]}</Box>
-      </Box>
-      <Box variant="p">
-        {contactAttributes[key]?.value || '-'}
-      </Box>
-    </div>
-  );
-};
+  const renderContactAttribute = (key) => {
+    const allowedKeys = Object.keys(config?.contactAttributes || {});
+    if (!allowedKeys.includes(key)) {
+      return null;
+    }
 
- const renderAttributesTab = () => (
-  <Suspense fallback={<div>{t('tab.attribute.loadingMessage')}</div>}>
-    <Container>
-      {hasActiveContact && config ? (
-        <SpaceBetween size="l">
-          <ColumnLayout columns={2} variant="text-grid">
-            {Object.keys(config?.contactAttributes || {}).map(renderContactAttribute)}
-          </ColumnLayout>
-        </SpaceBetween>
-      ) : (
-        <Alert type="info">
-          通話が確立されると、コンタクト属性が表示されます。
-        </Alert>
-      )}
-    </Container>
-  </Suspense>
-);
+    return (
+      <div key={key}>
+        <Box variant="awsui-key-label">
+          <Box fontWeight="bold">{config?.contactAttributes[key]}</Box>
+        </Box>
+        <Box variant="p">{contactAttributes[key]?.value || '-'}</Box>
+      </div>
+    );
+  };
+
+  const renderAttributesTab = () => (
+    <Suspense fallback={<div>{t('tab.attribute.loadingMessage')}</div>}>
+      <Container>
+        {hasActiveContact && config ? (
+          <SpaceBetween size="l">
+            <ColumnLayout columns={2} variant="text-grid">
+              {Object.keys(config?.contactAttributes || {}).map(renderContactAttribute)}
+            </ColumnLayout>
+          </SpaceBetween>
+        ) : (
+          <Alert type="info">
+            通話が確立されると、コンタクト属性が表示されます。
+          </Alert>
+        )}
+      </Container>
+    </Suspense>
+  );
 
   return (
     <Suspense fallback={<div>{t('common.app.loadingMessage')}</div>}>
@@ -563,7 +634,6 @@ function App() {
         <SpaceBetween size="l">
           {renderHeader()}
           {renderContactInfo()}
-          
           <Tabs
             tabs={[
               {
@@ -602,5 +672,3 @@ function App() {
 }
 
 export default App;
-
-
