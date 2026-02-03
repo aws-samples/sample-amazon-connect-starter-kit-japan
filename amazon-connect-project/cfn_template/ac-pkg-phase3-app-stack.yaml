@@ -50,7 +50,7 @@ Parameters:
   WebACLName:
     Type: String
     Description: Name suffix of the WAF WebACL (will be prefixed with stack name)
-    Default: 'myapp-webacl'
+    Default: ''
 
   Scope:
     Type: String
@@ -58,6 +58,7 @@ Parameters:
     AllowedValues:
       - CLOUDFRONT
       - REGIONAL
+      - ''
     Description: Scope of the WebACL (CLOUDFRONT for CloudFront, REGIONAL for ALB/API Gateway)
 
   IPv4AllowList:
@@ -81,6 +82,8 @@ Parameters:
     Description: Can be left blank. Comma-separated list of IPv6 CIDR blocks to block
 
 Conditions:
+  # WebACLNameが空でない場合のみWAFを作成
+  CreateWAF: !Not [!Equals [!Ref WebACLName, '']]
   HasIPv4Allow: !Not [!Equals [!Join ['', !Ref IPv4AllowList], '']]
   HasIPv6Allow: !Not [!Equals [!Join ['', !Ref IPv6AllowList], '']]
   HasIPv4Block: !Not [!Equals [!Join ['', !Ref IPv4BlockList], '']]
@@ -131,6 +134,7 @@ Resources:
   # WAF WebACL
   WebACL:
     Type: AWS::WAFv2::WebACL
+    Condition: CreateWAF
     Properties:
       Name: !Sub '${WebACLName}'
       Scope: !Ref Scope
@@ -476,7 +480,6 @@ Resources:
                 - AWSManagedRulesBotControlRuleSet:
                     InspectionLevel: COMMON
 
-
   # 1. CloudFront Resources
   CloudFrontOriginAccessControl:
     Type: AWS::CloudFront::OriginAccessControl
@@ -519,7 +522,7 @@ Resources:
         ViewerCertificate:
           MinimumProtocolVersion: TLSv1.2_2021
           CloudFrontDefaultCertificate: true
-        WebACLId: !GetAtt WebACL.Arn
+        WebACLId: !If [CreateWAF, !GetAtt WebACL.Arn, !Ref 'AWS::NoValue']
 
   BucketPolicy:
     Type: AWS::S3::BucketPolicy
@@ -618,7 +621,8 @@ Resources:
 
 Outputs:
   WebACLArn:
-    Description: The ARN of the WAF WebACL
+    Condition: CreateWAF
+    Description: The ARN of the WAF WebACL (only created in us-east-1)
     Value: !GetAtt WebACL.Arn
 
   CloudFrontDomainName:

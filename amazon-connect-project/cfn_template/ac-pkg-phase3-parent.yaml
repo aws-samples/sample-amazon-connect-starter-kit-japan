@@ -1,6 +1,9 @@
-# parent-stack.yaml
 AWSTemplateFormatVersion: '2010-09-09'
 Description: 'Parent stack for Amazon Connect deployment'
+
+Conditions:
+  # us-east-1の場合のみWAFを作成
+  IsUsEast1: !Equals [!Ref Region, 'us-east-1']
 
 Metadata:
   AWS::CloudFormation::Interface:
@@ -44,34 +47,34 @@ Parameters:
   AwsAccountId:
     Type: String
     Description: 'AWS Account ID'
-
+  
   InstanceAlias:
     Type: String
     Description: 'The instance alias for the Amazon Connect instance'
     MaxLength: 64
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Instance alias can only contain lowercase letters, numbers, and hyphens.'
-
+  
   ConnectInstanceArn:
     Type: String
     Description: 'ARN of the Amazon Connect instance'
     Default: 'arn:aws:connect:ap-northeast-1:xxxx:instance/xxxx'
-
+  
   QiCDomainArn:
     Type: String
     Description: 'Connect AI agents domain Arn'
     Default: 'arn:aws:wisdom:ap-northeast-1:xxxx:assistant/xxxx'
-
+  
   CasesDomainId:
     Type: String
     Description: 'ID of the Amazon Connect cases domain'
-
+  
   # Application Parameters
   ApplicationName:
     Type: String
     Description: 'Name of the Connect 3rd Party Application'
     Default: 'MyConnectApp'
-
+  
   Region:
     Type: String
     Description: Target Region to specify Amazon Connect instance, S3 bucket, and LLM for Connect AI agents prompts
@@ -102,7 +105,7 @@ Resources:
       Parameters:
         CasesDomainId: !Ref CasesDomainId
         CasesTemplateName: !Sub '${AWS::StackName}-cases-template'
-        
+
   # 3. QiC AI Agent Stack
   QiCAIAgentStack:
     Type: AWS::CloudFormation::Stack
@@ -114,7 +117,7 @@ Resources:
         QicPrefix: !Ref 'AWS::StackName'
         ConnectInstanceArn: !Ref ConnectInstanceArn
         Region: !Ref Region
-        
+
   # 4. Contact Flow Stack
   ContactFlowStack:
     Type: AWS::CloudFormation::Stack
@@ -135,7 +138,7 @@ Resources:
         Region: !Ref Region
         SelfServiceOrchestrationAIAgentArn: !GetAtt QiCAIAgentStack.Outputs.SelfServiceOrchestrationAIAgentArn
         SelfServiceOrchestrationAIAgentName: !GetAtt QiCAIAgentStack.Outputs.SelfServiceOrchestrationAIAgentName
-        
+
   # 5. 3rd Party App Stack  
   ThirdPartyAppStack:
     Type: AWS::CloudFormation::Stack
@@ -151,30 +154,39 @@ Resources:
         ConnectInstanceArn: !Ref ConnectInstanceArn
         ApplicationName: !Ref ApplicationName
         SecurityProfileName: 'CustomAgent'
-        WebACLName: !Sub '${AWS::StackName}-myapp-webacl'
-        Scope: 'CLOUDFRONT'
+        # us-east-1の場合のみWebACLNameとScopeを渡す、それ以外は空文字
+        WebACLName: !If [IsUsEast1, !Sub '${AWS::StackName}-myapp-webacl', '']
+        Scope: !If [IsUsEast1, 'CLOUDFRONT', '']
 
 Outputs:
   ConversationalBotStack:
     Description: 'ID of the ConversationalBot Stack'
     Value: !Ref ConversationalBotStack
-
+  
   CasesTemplateStack:
     Description: 'ID of the CasesTemplate Stack'
     Value: !Ref CasesTemplateStack
-
+  
   ConnectAIagentsStackId:
     Description: 'ID of the Connect AI agents Stack'
     Value: !Ref QiCAIAgentStack
-
+  
   ContactFlowStackId:
     Description: 'ID of the ConnectFlow Stack'
     Value: !Ref ContactFlowStack
-
+  
   ThirdPartyAppStackId:
     Description: 'ID of the Third Party App Stack'
     Value: !Ref ThirdPartyAppStack
-
+  
   StackName:
     Description: 'Name of this stack'
     Value: !Ref 'AWS::StackName'
+  
+  Region:
+    Description: 'Selected region'
+    Value: !Ref Region
+  
+  WAFEnabled:
+    Description: 'Whether WAF is enabled (only in us-east-1)'
+    Value: !If [IsUsEast1, 'true', 'false']

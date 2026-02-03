@@ -26,19 +26,19 @@ Parameters:
       - 'Yes'
       - 'No'
     Default: 'Yes'
-
+  
   InstanceAlias:
     Type: String
     Description: 'The instance alias for the Amazon Connect instance. Use only lowercase letters, numbers, and hyphens.'
     MaxLength: 64
     AllowedPattern: '^[a-z0-9-]+$'
     ConstraintDescription: 'Instance alias can only contain lowercase letters, numbers, and hyphens.'
-
+  
   ExistingInstanceId:
     Type: String
     Description: 'Existing Connect instance ID (required if not creating a new Amazon Connect instance)'
     Default: ''
-
+  
   EnableAmazonConnectAIagents:
     Type: String
     AllowedValues: 
@@ -55,7 +55,7 @@ Rules:
     Assertions:
       - Assert: !Not [!Equals [!Ref InstanceAlias, '']]
         AssertDescription: InstanceAlias must be provided when creating a new instance
-
+  
   ValidateExistingInstanceId:
     RuleCondition: !Equals 
       - !Ref CreateNewInstance
@@ -73,7 +73,38 @@ Conditions:
     - 'Yes'
 
 Resources:
-  # ロギング用バケット
+
+  # ========================================
+  # 0. Connect Instance
+  # ========================================
+  ConnectInstance:
+    Type: AWS::Connect::Instance
+    Condition: ShouldCreateNewInstance
+    Properties:
+      Attributes: 
+        AutoResolveBestVoices: true
+        ContactLens: true
+        ContactflowLogs: true
+        EarlyMedia: true
+        InboundCalls: true
+        OutboundCalls: true
+        UseCustomTTSVoices: false
+      IdentityManagementType: CONNECT_MANAGED
+      InstanceAlias: !Ref InstanceAlias
+
+  ConnectPhoneNumber:
+    Type: AWS::Connect::PhoneNumber
+    Condition: ShouldCreateNewInstance
+    DependsOn: ConnectInstance
+    Properties:
+      CountryCode: US
+      Type: DID
+      TargetArn: !GetAtt ConnectInstance.Arn
+      Description: "A US phone number for testing"
+
+  # ========================================
+  # 1. ロギング用バケット
+  # ========================================
   LoggingBucket:
     Type: AWS::S3::Bucket
     Properties:
@@ -93,80 +124,12 @@ Resources:
       VersioningConfiguration:
         Status: Enabled
 
-  # Amazon Connect 用のS3バケット作成
-  ConnectS3Bucket:
-    Type: AWS::S3::Bucket
-    Condition: ShouldCreateNewInstance
-    Properties:
-      BucketName: !Sub 'amazonconnect-${InstanceAlias}'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
-      LoggingConfiguration:
-        DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: connect-bucket-logs/
-      Tags:
-        - Key: Purpose
-          Value: ConnectRecordings
-
-  # Amazon Connect Package用のS3バケット作成
-  ConnectS3BucketApp:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: !Sub 'amazonconnect-${InstanceAlias}-app'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
-      LoggingConfiguration:
-        DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: connect-app-bucket-logs/
-      Tags:
-        - Key: Purpose
-          Value: ConnectPackage
-
-  # Amazon Connect AI agents ナレッジソース用のS3バケット作成
-  ConnectS3BucketAIagents:
-    Type: AWS::S3::Bucket
-    Condition: CreateAssistantResources
-    Properties:
-      BucketName: !Sub 'amazonconnect-${InstanceAlias}-aiagents'
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: true
-        BlockPublicPolicy: true
-        IgnorePublicAcls: true
-        RestrictPublicBuckets: true
-      BucketEncryption:
-        ServerSideEncryptionConfiguration:
-          - ServerSideEncryptionByDefault:
-              SSEAlgorithm: AES256
-      VersioningConfiguration:
-        Status: Enabled
-      LoggingConfiguration:
-        DestinationBucketName: !Ref LoggingBucket
-        LogFilePrefix: connect-aiagents-bucket-logs/
-      Tags:
-        - Key: Purpose
-          Value: Amazon Connect AI agents Knowledge Source
-
-  # ロギング用バケットのポリシー
+  # ========================================
+  # 2. ロギング用バケットのポリシー
+  # ========================================
   LoggingBucketPolicy:
     Type: AWS::S3::BucketPolicy
+    DependsOn: LoggingBucket
     Properties:
       Bucket: !Ref LoggingBucket
       PolicyDocument:
@@ -179,82 +142,22 @@ Resources:
             Action: 
               - s3:PutObject
             Resource: !Sub 'arn:aws:s3:::${LoggingBucket}/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref 'AWS::AccountId'
           - Sid: AllowCloudFrontLogDelivery
             Effect: Allow
             Principal:
               Service: cloudfront.amazonaws.com
             Action: 's3:PutObject'
-            Resource: !Sub "${LoggingBucket.Arn}/*"
-
-  # AmazonConnect用バケットのポリシー
-  ConnectS3BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: ShouldCreateNewInstance
-    DependsOn:
-      - ConnectS3Bucket
-    Properties:
-      Bucket: !Ref ConnectS3Bucket
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowConnectAccess
-            Effect: Allow
-            Principal:
-              Service: connect.amazonaws.com
-            Action:
-              - s3:PutObject
-              - s3:GetObject
-            Resource: !Sub '${ConnectS3Bucket.Arn}/*'
-            Condition:
-              StringEquals:
-               aws:SourceAccount: !Ref 'AWS::AccountId'
-
-  # Amazon Connect Package用バケットのポリシー
-  ConnectS3BucketAppPolicy:
-    Type: AWS::S3::BucketPolicy
-    DependsOn:
-      - ConnectS3BucketApp
-    Properties:
-      Bucket: !Ref ConnectS3BucketApp
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowCloudFrontAccess
-            Effect: Allow
-            Principal:
-              Service: cloudfront.amazonaws.com
-            Action: 's3:GetObject'
-            Resource: !Sub '${ConnectS3BucketApp.Arn}/*'
-
-  # Connect AI agents 用S3バケットへのポリシー追加
-  BucketPolicy:
-    Type: AWS::S3::BucketPolicy
-    Condition: CreateAssistantResources
-    DependsOn:
-      - ConnectS3BucketAIagents
-    Properties:
-      Bucket: !Ref ConnectS3BucketAIagents
-      PolicyDocument:
-        Version: '2012-10-17'
-        Statement:
-          - Sid: AllowAppIntegrationsDataIntegrations
-            Effect: Allow
-            Principal:
-              Service: app-integrations.amazonaws.com
-            Action:
-              - s3:ListBucket
-              - s3:GetObject
-              - s3:GetBucketLocation
-            Resource:
-              - !Sub 'arn:aws:s3:::${ConnectS3BucketAIagents}'
-              - !Sub 'arn:aws:s3:::${ConnectS3BucketAIagents}/*'
+            Resource: !Sub '${LoggingBucket.Arn}/*'
             Condition:
               StringEquals:
                 aws:SourceAccount: !Ref 'AWS::AccountId'
-              ArnEquals:
-                aws:SourceArn: !Sub 'arn:aws:app-integrations:${AWS::Region}:${AWS::AccountId}:data-integration/*'
 
-  # 統合されたKMSキー
+  # ========================================
+  # 3. KMSキー
+  # ========================================
   ConnectKMSKey:
     Type: AWS::KMS::Key
     Properties:
@@ -314,36 +217,161 @@ Resources:
 
   ConnectKMSAlias:
     Type: AWS::KMS::Alias
+    DependsOn: ConnectKMSKey
     Properties:
       AliasName: !Sub 'alias/${AWS::StackName}-connect'
       TargetKeyId: !Ref ConnectKMSKey
 
-  ConnectInstance:
-    Type: AWS::Connect::Instance
+  # ========================================
+  # 4. その他のS3バケット
+  # ========================================
+  
+  # Amazon Connect 用のS3バケット
+  ConnectS3Bucket:
+    Type: AWS::S3::Bucket
     Condition: ShouldCreateNewInstance
+    DependsOn: LoggingBucketPolicy
     Properties:
-      Attributes: 
-        AutoResolveBestVoices: true
-        ContactLens: true
-        ContactflowLogs: true
-        EarlyMedia: true
-        InboundCalls: true
-        OutboundCalls: true
-        UseCustomTTSVoices: false
-      IdentityManagementType: CONNECT_MANAGED
-      InstanceAlias: !Ref InstanceAlias
-      ServiceRole: !Sub 'aws-service-role/connect.amazonaws.com/AWSServiceRoleForAmazonConnect'
+      BucketName: !Sub 'amazonconnect-${InstanceAlias}'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: connect-bucket-logs/
+      Tags:
+        - Key: Purpose
+          Value: ConnectRecordings
 
-  ConnectPhoneNumber:
-    Type: AWS::Connect::PhoneNumber
-    Condition: ShouldCreateNewInstance
-    DependsOn:
-      - ConnectInstance
+  # Amazon Connect Package用のS3バケット
+  ConnectS3BucketApp:
+    Type: AWS::S3::Bucket
+    DependsOn: LoggingBucketPolicy
     Properties:
-      CountryCode: US
-      Type: DID
-      TargetArn: !GetAtt ConnectInstance.Arn
-      Description: "A US phone number for testing"
+      BucketName: !Sub 'amazonconnect-${InstanceAlias}-app'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: connect-app-bucket-logs/
+      Tags:
+        - Key: Purpose
+          Value: ConnectPackage
+
+  # Amazon Connect AI agents ナレッジソース用のS3バケット
+  ConnectS3BucketAIagents:
+    Type: AWS::S3::Bucket
+    Condition: CreateAssistantResources
+    DependsOn: LoggingBucketPolicy
+    Properties:
+      BucketName: !Sub 'amazonconnect-${InstanceAlias}-aiagents'
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      VersioningConfiguration:
+        Status: Enabled
+      LoggingConfiguration:
+        DestinationBucketName: !Ref LoggingBucket
+        LogFilePrefix: connect-aiagents-bucket-logs/
+      Tags:
+        - Key: Purpose
+          Value: Amazon Connect AI agents Knowledge Source
+
+  # ========================================
+  # 5. バケットポリシー
+  # ========================================
+  
+  # AmazonConnect用バケットのポリシー
+  ConnectS3BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: ShouldCreateNewInstance
+    DependsOn: ConnectS3Bucket
+    Properties:
+      Bucket: !Ref ConnectS3Bucket
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowConnectAccess
+            Effect: Allow
+            Principal:
+              Service: connect.amazonaws.com
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: !Sub '${ConnectS3Bucket.Arn}/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref 'AWS::AccountId'
+
+  # Amazon Connect Package用バケットのポリシー
+  ConnectS3BucketAppPolicy:
+    Type: AWS::S3::BucketPolicy
+    DependsOn: ConnectS3BucketApp
+    Properties:
+      Bucket: !Ref ConnectS3BucketApp
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowCloudFrontAccess
+            Effect: Allow
+            Principal:
+              Service: cloudfront.amazonaws.com
+            Action: 's3:GetObject'
+            Resource: !Sub '${ConnectS3BucketApp.Arn}/*'
+
+  # Connect AI agents 用S3バケットへのポリシー
+  BucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Condition: CreateAssistantResources
+    DependsOn: ConnectS3BucketAIagents
+    Properties:
+      Bucket: !Ref ConnectS3BucketAIagents
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: AllowAppIntegrationsDataIntegrations
+            Effect: Allow
+            Principal:
+              Service: app-integrations.amazonaws.com
+            Action:
+              - s3:ListBucket
+              - s3:GetObject
+              - s3:GetBucketLocation
+            Resource:
+              - !Sub 'arn:aws:s3:::${ConnectS3BucketAIagents}'
+              - !Sub 'arn:aws:s3:::${ConnectS3BucketAIagents}/*'
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref 'AWS::AccountId'
+              ArnEquals:
+                aws:SourceArn: !Sub 'arn:aws:app-integrations:${AWS::Region}:${AWS::AccountId}:data-integration/*'
+
+  # ========================================
+  # 6. Connect Instance（ストレージ）
+  # ========================================
 
   # Amazon Connect で録音を有効化
   ConnectInstanceStorageConfig:
@@ -351,7 +379,7 @@ Resources:
     Condition: ShouldCreateNewInstance
     DependsOn: 
       - ConnectInstance
-      - ConnectS3Bucket
+      - ConnectS3BucketPolicy
     Properties:
       InstanceArn: !GetAtt ConnectInstance.Arn
       ResourceType: CALL_RECORDINGS
@@ -363,9 +391,12 @@ Resources:
           EncryptionType: KMS
           KeyId: !GetAtt ConnectKMSKey.Arn
 
-  # Customer Profiles Resources
+  # ========================================
+  # 7. Customer Profiles & Cases
+  # ========================================
   CustomerProfiles:
     Type: AWS::CustomerProfiles::Domain
+    DependsOn: ConnectKMSKey
     Properties:
       DomainName: !If 
         - ShouldCreateNewInstance
@@ -377,7 +408,6 @@ Resources:
         - Key: "Environment"
           Value: "Production"
 
-  # Cases Resources
   AmazonConnectCases:
     Type: AWS::Cases::Domain
     Properties:
@@ -389,11 +419,14 @@ Resources:
         - Key: "Environment"
           Value: "Production"
 
-  # Amazon Connect AI agents Resources
+  # ========================================
+  # 8. Amazon Connect AI agents Resources
+  # ========================================
   DataIntegration:
     Type: 'AWS::AppIntegrations::DataIntegration'
     Condition: CreateAssistantResources
     DependsOn:
+      - BucketPolicy
       - CustomerProfiles
     Properties:
       Name: !Sub 'aiagents-amazonconnect-${InstanceAlias}'
@@ -403,9 +436,7 @@ Resources:
   KnowledgeBase:
     Type: 'AWS::Wisdom::KnowledgeBase'
     Condition: CreateAssistantResources
-    DependsOn: 
-      - DataIntegration
-      - CustomerProfiles
+    DependsOn: DataIntegration
     Properties:
       Name: !Sub 'aiagents-amazonconnect-${InstanceAlias}'
       KnowledgeBaseType: EXTERNAL
@@ -421,24 +452,25 @@ Resources:
   Assistant:
     Type: 'AWS::Wisdom::Assistant'
     Condition: CreateAssistantResources
-    DependsOn:
-      - CustomerProfiles
+    DependsOn: CustomerProfiles
     Properties:
       Name: !Sub 'aiagents-amazonconnect-${InstanceAlias}'
       Type: AGENT
       Description: 'Connect AI agents domain created via CloudFormation'
+      ServerSideEncryptionConfiguration:
+        KmsKeyId: !GetAtt ConnectKMSKey.Arn
 
   AssistantAssociation:
     Type: 'AWS::Wisdom::AssistantAssociation'
     Condition: CreateAssistantResources
+    DependsOn:
+      - KnowledgeBase
+      - Assistant
     Properties:
       AssistantId: !Ref Assistant
       AssociationType: KNOWLEDGE_BASE
       Association:
         KnowledgeBaseId: !Ref KnowledgeBase
-    DependsOn:
-      - KnowledgeBase
-      - Assistant
 
 Outputs:
   ConnectInstanceArn:
@@ -447,73 +479,31 @@ Outputs:
       - ShouldCreateNewInstance
       - !GetAtt ConnectInstance.Arn
       - !Sub 'arn:aws:connect:${AWS::Region}:${AWS::AccountId}:instance/${ExistingInstanceId}'
-
+  
   ConnectAIagentsDomainArn:
     Condition: CreateAssistantResources
     Description: 'ARN of the created Connect AI agents domain'
     Value: !GetAtt Assistant.AssistantArn
-
+  
   PhoneNumber:
     Condition: ShouldCreateNewInstance
     Description: 'The phone number, in E.164 format.'
     Value: !GetAtt ConnectPhoneNumber.Address
-
+  
   ConnectS3BucketName:
     Condition: ShouldCreateNewInstance
     Description: 'Name of the S3 bucket for Connect recordings'
     Value: !Ref ConnectS3Bucket
-
+  
   ConnectAppS3BucketName:
     Description: 'Name of the S3 bucket for Connect Package'
     Value: !Ref ConnectS3BucketApp
-
+  
   ConnectAIagentsS3BucketName:
     Condition: CreateAssistantResources
     Description: 'Name of the S3 bucket for Connect AI agents'
     Value: !Ref ConnectS3BucketAIagents
-
+  
   CasesDomainId:
     Description: The Id of the Cases domain
     Value: !GetAtt AmazonConnectCases.DomainId
-
-#  CustomerProfilesDomainName:
-#    Description: The name of the Customer Profiles domain
-#    Value: !Ref CustomerProfiles
-
-#  CasesDomainName:
-#    Description: The name of the Cases domain
-#    Value: !Ref AmazonConnectCases
-
-#  AssistantId:
-#    Condition: CreateAssistantResources
-#    Description: 'ID of the created Connect AI agents Assistant'
-#    Value: !Ref Assistant
-    
-#  AssistantAssociationId:
-#    Condition: CreateAssistantResources
-#    Description: 'ID of the created Assistant Association'
-#    Value: !Ref AssistantAssociation
-  
-#  KnowledgeBaseId:
-#    Condition: CreateAssistantResources
-#    Description: 'ID of the created Knowledge Base'
-#    Value: !Ref KnowledgeBase
-  
-#  DataIntegrationArn:
-#    Condition: CreateAssistantResources
-#    Description: 'ARN of the created Data Integration'
-#    Value: !GetAtt DataIntegration.DataIntegrationArn
-  
-#  KMSKeyId:
-#    Description: 'ID of the KMS key'
-#    Value: !Ref ConnectKMSKey
-  
-#  KMSKeyArn:
-#    Description: 'ARN of the KMS key'
-#    Value: !GetAtt ConnectKMSKey.Arn
-
-#  ConnectAIagentsBucketPolicyArn:
-#    Condition: CreateAssistantResources
-#    Description: 'ARN of the bucket policy'
-#    Value: !Sub 'arn:aws:s3:::${ConnectS3BucketAIagents}/policy'
-
