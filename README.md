@@ -1,7 +1,7 @@
 # sample-amazon-connect-smb-starter-kit-japan
 
 ## お知らせ
-※ us-east-1 でデプロイをお願いします。
+※ us-east-1/ap-north-east1 の両方でデプロイ可能になりました。
 
 ## バージョン情報
 **v2.0.1** (2026年2月)
