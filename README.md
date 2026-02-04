@@ -9,7 +9,7 @@
 ## 更新情報
 2026年2月
 - 更新内容
-  - **AI Agents に対応**: Q in Connect から AI Agents へ刷新し、オーケストレーションタイプの AI Agent/AI Prompt の日本版を提供
+  - **AI agents に対応**: Q in Connect から AI agents へ刷新し、オーケストレーションタイプの AI Agent/AI Prompt の日本語版を提供
   - **エスカレーション機能の強化**: 会話型ボットからオペレータへのエスカレーション時に理由や要件を自動判定し、自律的に適切な窓口へ転送が可能に
   - **オペレータ画面の改善**: MyConnectApp(3rd Party App)の画面にボットとの会話要約やエスカレーション理由を自動表示
   - **Amazon Connect Cases 統合**: ケース要約機能を追加
@@ -56,7 +56,7 @@
 
 ## 主要機能/特徴
 
-- Amazon Connect にはコンタクトセンター運営に必要な主要機能が多く備わっています。本パッケージの利用により、コールフローに関しては、直収、セルフサービス(Lex と AI Agents の統合)のフローテンプレートが提供されます。各テンプレートには、会話の文字おこしなど応対品質の向上に役立つ Contact Lens の初期設定や、2025年～2030年の祝日カレンダーが組み込まれています。さらに、事前設定済みの Customer Profiles と Cases は、顧客データと応対履歴の管理機能の利用をすぐに可能です。また、エージェントが利用するエージェントワークスペース(ソフトフォン)を拡張する 3rd Party App(発信者ID番号選択、通話履歴、コール情報表示など)や、Amazon Q in Connect(エージェントアシスト)の初期設定も含まれます。
+- Amazon Connect にはコンタクトセンター運営に必要な主要機能が多く備わっています。本パッケージの利用により、コールフローに関しては、直収、セルフサービス(Lex と AI agents の統合)のフローテンプレートが提供されます。各テンプレートには、会話の文字おこしなど応対品質の向上に役立つ Contact Lens の初期設定や、2025年～2030年の祝日カレンダーが組み込まれています。さらに、事前設定済みの Customer Profiles と Cases は、顧客データと応対履歴の管理機能の利用をすぐに可能です。また、エージェントが利用するエージェントワークスペース(ソフトフォン)を拡張する 3rd Party App(発信者ID番号選択、通話履歴、コール情報表示など)や、AI agents、Connect Assitance(エージェントアシスト)の初期設定も含まれます。
 
 ![CX_And_Built-in-AI](docs/images/FCD_BuiltInAI.jpg)
 
@@ -90,7 +90,7 @@
   - amazonconnect-[InstanceAliace]-aiagents: Amazon Connect AI Agents が参照するナレッジソースの格納先となるバケットです。
   - amazonconnect-[InstanceAliace]-logs: S3 バケットのアクセスログ、Amazon CloudFront のアクセスログの格納先となるバケットです。
 - Amazon CloudFront: エージェントワークスペースの拡張機能（MyConnectApp）を配信するための CDN として使用します。
-- AWS WAF: CloudFront ディストリビューションに AWS WAF を統合し、Web アプリケーションを保護します。
+- AWS WAF: CloudFront ディストリビューションに AWS WAF を統合し、Web アプリケーションを保護します。※ us-east-1 の場合自動で適用
 - Amazon Lex: セルフサービスを提供するための音声ボットサービスです。Amazon Connect のコンタクトフローから連携され、ナレッジソース参照のため Amazon Q in Connect と連携します。
 - AWS Lambda: サンプルコンタクトフローをデプロイするためのリソース参照用の AWS Lambda です。AWS CloudFormation によるデプロイ時のみ利用します。本パッケージの動作では利用しません。
 
@@ -137,7 +137,7 @@
 ### Amazon Connect
 Amazon Connect Voice では、使用に関連して、音声サービスの料金と通信サービス (テレフォニーまたはウェブ通話) の料金の 2 つの料金が発生します。音声サービスの利用料は、1 秒単位 (最低 10 秒) で請求されます。着信通話および CCP(コンタクトコントロールパネル) からダイヤルする手動の発信通話についての Amazon Connect Voice サービスの使用量は、エンドカスタマーがサービスに接続された秒数によって決まります。
 
-### Amazon Connect AI Agents
+### Amazon Connect AI agents
 Amazon Connect AI Agents が送受信するチャットメッセージ 1 件につき 0.0015 USD で請求されます。同様に、Amazon Connect AI Agents を有効にした、通話時間 1 分につき 0.008 USD が請求され、最低 10 秒の請求要件があります。Amazon Connect AI Agents をコンタクトのセルフサービス部分に使用された場合、セルフサービスインタラクションの全期間分の料金が請求されます。Amazon Connect でのセルフサービスエクスペリエンスの構築や編集には料金はかかりませんが、Amazon Lex の使用分は別途請求されます。
 
 ### Amazon S3
