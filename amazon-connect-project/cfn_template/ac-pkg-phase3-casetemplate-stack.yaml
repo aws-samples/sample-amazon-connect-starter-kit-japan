@@ -43,7 +43,7 @@ Resources:
   CasesFieldOptionsFunction:
     Type: AWS::Lambda::Function
     Properties:
-      FunctionName: !Sub '${AWS::StackName}-CasesFieldOptions'
+      FunctionName: !Sub '${AWS::StackName}-CasesFieldFn'
       Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt CasesCustomResourceRole.Arn

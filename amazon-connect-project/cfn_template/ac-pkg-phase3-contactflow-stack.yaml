@@ -173,6 +173,7 @@ Resources:
   ResourceLookupFunction:
     Type: 'AWS::Lambda::Function'
     Properties:
+      FunctionName: !Sub '${AWS::StackName}-ResLookupFn'
       Runtime: python3.12
       Handler: index.handler
       Role: !GetAtt LambdaExecutionRole.Arn
