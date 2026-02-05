@@ -1,4 +1,4 @@
-# sample-amazon-connect-smb-starter-kit-japan
+# sample-amazon-connect-starter-kit-japan
 
 ## お知らせ
 ※ us-east-1/ap-northeast-1 の両方でデプロイ可能になりました。
@@ -47,7 +47,7 @@
 
 ## 本パッケージについて
 
-- 本パッケージ(sample-amazon-connect-smb-starter-kit-japan)は、中小規模のコンタクトセンターを運営する企業向けに開発された、Amazon Connect の導入・デプロイを支援する統合ソリューションです。
+- 本パッケージ(sample-amazon-connect-starter-kit-japan)は、コンタクトセンターを運営する企業向けに開発された、Amazon Connect の導入・デプロイを支援する統合ソリューションです。
 - 本パッケージを導入することで、投資から価値創出までの時間を大幅に短縮し、ビジネスの成長を加速させることができます。シンプルな操作で高度な機能を実現し、効率的なコンタクトセンター運営を支援します。
 
 ## 解決可能な課題
