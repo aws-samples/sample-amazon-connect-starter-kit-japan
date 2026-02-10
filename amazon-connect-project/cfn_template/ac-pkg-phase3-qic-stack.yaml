@@ -2201,7 +2201,60 @@ Resources:
               Instruction:
                 Instruction: 会話とその内容に関するメモ、要約、概要を生成するよう求められた場合に必須です。このツールの出力にはHTMLタグが含まれており、正しく表示されるよう、レスポンスに直接入力する必要があります。出力を再要約するのではなく、HTMLを直接入力してください。
                 Examples:
-                  - "## Tool Output"
+                  - |
+                    ## Tool Output
+                    <notes>
+                      <b>お客様の問題</b>
+                      <ul>
+                        <li>自動車ローンの月々の支払額が予想より高い</li>
+                        <li>金利の見直しを希望</li>
+                        <li>支払い期間の延長を検討中</li>
+                      </ul>
+                      <b>担当者の対応</b>
+                      <ul>
+                        <li>現在のローン条件を確認</li>
+                        <li>金利優遇プログラムの適用可否を審査</li>
+                        <li>支払いプランの再計算を実施</li>
+                        <li>審査部門に条件変更申請を提出</li>
+                      </ul>
+                      <b>次のステップ</b>
+                      <ul>
+                        <li>審査部門が2～3営業日以内に審査結果を連絡</li>
+                        <li>承認後、新しい契約書を郵送</li>
+                      </ul>
+                      <b>プロファイル情報</b>
+                      <ul>
+                        <li>優良顧客として金利優遇の対象</li>
+                        <li>過去の支払い履歴に遅延なし</li>
+                      </ul>
+                    </notes>
+                    
+                    ## Your Response - provide the HTML directly:
+                    <message>
+                      <b>お客様の問題</b>
+                      <ul>
+                        <li>自動車ローンの月々の支払額が予想より高い</li>
+                        <li>金利の見直しを希望</li>
+                        <li>支払い期間の延長を検討中</li>
+                      </ul>
+                      <b>担当者の対応</b>
+                      <ul>
+                        <li>現在のローン条件を確認</li>
+                        <li>金利優遇プログラムの適用可否を審査</li>
+                        <li>支払いプランの再計算を実施</li>
+                        <li>審査部門に条件変更申請を提出</li>
+                      </ul>
+                      <b>次のステップ</b>
+                      <ul>
+                        <li>審査部門が2～3営業日以内に審査結果を連絡</li>
+                        <li>承認後、新しい契約書を郵送</li>
+                      </ul>
+                      <b>プロファイル情報</b>
+                      <ul>
+                        <li>優良顧客として金利優遇の対象</li>
+                        <li>過去の支払い履歴に遅延なし</li>
+                      </ul>
+                    </message>
               OverrideInputValues:
                 - JsonPath: $.assistantId
                   Value:
@@ -2226,13 +2279,82 @@ Resources:
               Instruction:
                 Instruction: 自動車ローン、クレジットカード、支払い請求、ITサポートに関する顧客対応を行う専門エージェントとして、このツールを使用してナレッジベースから関連情報を検索し、顧客の質問に正確かつわかりやすく回答してください。ナレッジベースに情報がない場合は推測で回答しないでください。
                 Examples:
-                  - "良い例 - ソースを含む複数のメッセージ:"
-                  - "良い例 - ソース付きの単一メッセージ:"
-                  - "悪い例 - ソースのないメッセージ(これは避けるべき):"
-                  - "悪い例 - 引用の後にメッセージ以外のテキストがある(これは避けるべき):"
-                  - "悪い例 - 引用のない検索結果から情報を提供する(これは避けるべき):"
-                  - "良い例 - 一部のメッセージに引用があるが、一部のメッセージには引用がない:"
-                  - "結果が見つからない："
+                  - |
+                    良い例 - 複数のメッセージ部分とソース付きの回答:
+                    <message>
+                      <message_part>
+                        <text>これは回答の最初の部分です。</text>
+                        <sources>
+                          <sourceId>sampleSourceId_1</sourceId>
+                          <sourceId>sampleSourceId_2</sourceId>
+                        </sources>
+                      </message_part>
+                      <message_part>
+                        <text>これは異なるソースを持つ2番目の部分です。</text>
+                        <sources>
+                          <sourceId>sampleSourceId_3</sourceId>
+                        </sources>
+                      </message_part>
+                    </message>
+                  - |
+                    良い例 - 単一のメッセージ部分とソース付きの回答:
+                    <message>
+                      <message_part>
+                        <text>保証に関する情報が見つかりました。製造上の欠陥については、最初の1年間、部品交換が保証されます。</text>
+                        <sources>
+                          <sourceId>warranty_policy_2024</sourceId>
+                        </sources>
+                      </message_part>
+                    </message>
+                  - |
+                    悪い例 - ソースのないメッセージ（これは避けてください）:
+                    <message>
+                      <message_part>
+                        <text>保証について見つかった情報は以下の通りです:</text>
+                      </message_part>
+                      <message_part>
+                        <text>部品交換が保証されます。</text>
+                        <sources>
+                          <sourceId>warranty_policy_2024</sourceId>
+                        </sources>
+                      </message_part>
+                    </message>
+                  - |
+                    悪い例 - 引用後のメッセージ外でのテキストメッセージ（これは避けてください）:
+                    <message>
+                      <message_part>
+                        <text>保証では、製造上の欠陥に対する部品交換が対象となります。</text>
+                        <sources>
+                          <sourceId>warranty_policy_2024</sourceId>
+                        </sources>
+                      </message_part>
+                      他に必要なことがあればお知らせください。
+                    </message>
+                  - |
+                    悪い例 - 引用なしで検索結果から情報を提供（これは避けてください）:
+                    <message>
+                      対象製品については、メーカー保証期間を超えた延長保証をご提供しています。
+                    </message>
+                  - |
+                    良い例 - 引用ありのメッセージと引用なしのメッセージの組み合わせ:
+                    <message>
+                      <message_part>
+                        <text>返品ポリシーに基づき、ほとんどの商品は購入後30日以内であれば全額返金が可能です。商品は元の状態で、レシートまたは購入証明が必要です。</text>
+                        <sources>
+                          <sourceId>return_policy_2024</sourceId>
+                          <sourceId>customer_handbook_3_2</sourceId>
+                        </sources>
+                      </message_part>
+                    </message>
+
+                    <message>
+                      電化製品の具体的な保証内容については現在確認中です。まもなく情報をご提供いたします。
+                    </message>
+                  - |
+                    結果なしの例:
+                    <message>
+                      そのトピックに関する具体的な情報は現在ご用意がございません。
+                    </message>
               OverrideInputValues:
                 - JsonPath: $.assistantId
                   Value:
