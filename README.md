@@ -9,8 +9,8 @@
 ## 更新情報
 2026年3月
 - 更新内容
-  - **AI Agents の更新**: SelfService 用 AI Prompt(SelfServiceOrchestration-prompt-jpn) にて、より適切なタイミングでエージェントへエスカレーションするようにプロンプトを更新
-  - ac-pkg-phase3-qic-stack.yaml を実行することで更新に関連する AI Agent と AI Prompt の再設定が可能
+  - **AI Agents の更新**: SelfService 用 AI Agent(SelfServiceOrchestration-jpn) および AI Prompt(SelfServiceOrchestration-prompt-jpn) にて、より適切なタイミングでエージェントへエスカレーションするように設定を更新
+  - すでに本パッケージをデプロイ済みの場合、ac-pkg-phase3-qic-stack.yaml を実行して AI Agent と AI Prompt を再設定してください
 
 2026年2月
 - 更新内容
