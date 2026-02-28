@@ -4,9 +4,14 @@
 ※ us-east-1/ap-northeast-1 の両方でデプロイ可能になりました。
 
 ## バージョン情報
-**v2.0.2** (2026年2月)
+**v2.0.3** (2026年3月)
 
 ## 更新情報
+2026年3月
+- 更新内容
+  - **AI Agents の更新**: SelfService 用 AI Prompt(SelfServiceOrchestration-prompt-jpn) にて、より適切なタイミングでエージェントへエスカレーションするようにプロンプトを更新
+  - ac-pkg-phase3-qic-stack.yaml を実行することで更新に関連する AI Agent と AI Prompt の再設定が可能
+
 2026年2月
 - 更新内容
   - **AI Agents の更新**: AgentAssistance 用 AI Agent が回答生成時に Source 情報を表示するように設定を追加
