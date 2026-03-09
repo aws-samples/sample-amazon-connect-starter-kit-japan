@@ -27,21 +27,23 @@ Mappings:
     ap-northeast-1:
       ModelIdQueryReformulation: 'apac.amazon.nova-lite-v1:0'
       ModelIdRecommendIntentLabeling: 'apac.amazon.nova-pro-v1:0'
-      ModelIdManualSearch: 'apac.anthropic.claude-3-5-sonnet-20241022-v2:0'
+      ModelIdManualSearch: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
       ModelIdAnswerGeneration: 'apac.amazon.nova-pro-v1:0'
       ModelIdPreprocessing: 'apac.amazon.nova-pro-v1:0'
       ModelIdCaseSummarization: 'apac.anthropic.claude-sonnet-4-20250514-v1:0'
       ModelIdSelfServiceOrchestration: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
       ModelIdAgentAssistanceOrchestration: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
+      ModelIdNoteTaking: 'global.anthropic.claude-sonnet-4-5-20250929-v1:0'
     us-east-1:
       ModelIdQueryReformulation: 'us.amazon.nova-lite-v1:0'
       ModelIdRecommendIntentLabeling: 'us.amazon.nova-pro-v1:0'
-      ModelIdManualSearch: 'us.anthropic.claude-3-7-sonnet-20250219-v1:0'
+      ModelIdManualSearch: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
       ModelIdAnswerGeneration: 'us.amazon.nova-pro-v1:0'
       ModelIdPreprocessing: 'us.amazon.nova-pro-v1:0'
       ModelIdCaseSummarization: 'us.anthropic.claude-sonnet-4-20250514-v1:0'
       ModelIdSelfServiceOrchestration: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
       ModelIdAgentAssistanceOrchestration: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
+      ModelIdNoteTaking: 'us.anthropic.claude-sonnet-4-5-20250929-v1:0'
 
 Resources:
   # セキュリティプロファイル作成(AIAgent用)
@@ -1830,9 +1832,10 @@ Resources:
               
               **重要なプロセス:**
               1. まず: <toolConfigurationList>を確認して、利用可能なツールを正確に理解する
-              2. ツールを2つのタイプに分類する:
+              2. ツールを3つのタイプに分類する:
                  - **取得ツール**（Get*、Describe*、List*）: 既存の情報を取得または説明するツール
-                 - **アクションツール**（Create*、Update*、Start*、Query*、Search*）: アクションを実行または何かを作成するツール
+                 - **メモ作成ツール**（GenerateNotes）: 会話のメモや要約を作成するツール
+                 - **アクションツール**（GenerateNotes、Create*、Update*、Start*、Query*、Search*）: アクションを実行または何かを作成するツール
               3. thinkingタグなしで直接応答する - これはシンプルな情報リクエストです
               
               **応答構造:**
@@ -2220,62 +2223,14 @@ Resources:
               ToolType: MODEL_CONTEXT_PROTOCOL
               ToolId: aws_service__qconnect_QueryAssistant
               Instruction:
-                Instruction: 会話とその内容に関するメモ、要約、概要を生成するよう求められた場合に必須です。このツールの出力にはHTMLタグが含まれており、正しく表示されるよう、レスポンスに直接入力する必要があります。出力を再要約するのではなく、HTMLを直接入力してください。
+                Instruction: 会話とその内容に関するメモ、要約、概要を生成するように求められた場合に必要です。このツールからの出力には、正しくレンダリングされるように応答で直接指定する必要がある HTML タグが含まれています。出力を再要約せず、HTML を直接提供してください。そして、あなたが使用するqueryConditionパラメータは["{\"single\":{\"comparator\":\"EQUALS\",\"field\":\"RESULT_TYPE\",\"value\":\"NOTES\"}}"]が正しい形式です。JSONオブジェクトの配列としてではなく、JSON文字列の配列として渡してください。
                 Examples:
-                  - |
+                  - |-
                     ## Tool Output
-                    <notes>
-                      <b>お客様の問題</b>
-                      <ul>
-                        <li>自動車ローンの月々の支払額が予想より高い</li>
-                        <li>金利の見直しを希望</li>
-                        <li>支払い期間の延長を検討中</li>
-                      </ul>
-                      <b>担当者の対応</b>
-                      <ul>
-                        <li>現在のローン条件を確認</li>
-                        <li>金利優遇プログラムの適用可否を審査</li>
-                        <li>支払いプランの再計算を実施</li>
-                        <li>審査部門に条件変更申請を提出</li>
-                      </ul>
-                      <b>次のステップ</b>
-                      <ul>
-                        <li>審査部門が2～3営業日以内に審査結果を連絡</li>
-                        <li>承認後、新しい契約書を郵送</li>
-                      </ul>
-                      <b>プロファイル情報</b>
-                      <ul>
-                        <li>優良顧客として金利優遇の対象</li>
-                        <li>過去の支払い履歴に遅延なし</li>
-                      </ul>
-                    </notes>
-                    
+                    <notes><b>お客様の問題</b><ul><li>ウェブサイト経由で不良プリンターを返品できない</li><li>返品期間が終了している</li><li>支払い方法が無効になっている</li></ul><b>オペレーターの対応</b><ul><li>返品の例外対応を実施</li><li>メーカーの不具合リコールを特定</li><li>返品処理を完了</li><li>請求部門向けに問題を記録</li></ul><b>次のステップ</b><ul><li>請求部門が3〜5営業日以内にお客様に連絡</li></ul><b>プロファイル情報</b><ul><li>プリンターモデルにメーカーの不具合リコールあり</li></ul></notes>
+
                     ## Your Response - provide the HTML directly:
-                    <message>
-                      <b>お客様の問題</b>
-                      <ul>
-                        <li>自動車ローンの月々の支払額が予想より高い</li>
-                        <li>金利の見直しを希望</li>
-                        <li>支払い期間の延長を検討中</li>
-                      </ul>
-                      <b>担当者の対応</b>
-                      <ul>
-                        <li>現在のローン条件を確認</li>
-                        <li>金利優遇プログラムの適用可否を審査</li>
-                        <li>支払いプランの再計算を実施</li>
-                        <li>審査部門に条件変更申請を提出</li>
-                      </ul>
-                      <b>次のステップ</b>
-                      <ul>
-                        <li>審査部門が2～3営業日以内に審査結果を連絡</li>
-                        <li>承認後、新しい契約書を郵送</li>
-                      </ul>
-                      <b>プロファイル情報</b>
-                      <ul>
-                        <li>優良顧客として金利優遇の対象</li>
-                        <li>過去の支払い履歴に遅延なし</li>
-                      </ul>
-                    </message>
+                    <message><b>お客様の問題</b><ul><li>ウェブサイト経由で不良プリンターを返品できない</li><li>返品期間が終了している</li><li>支払い方法が無効になっている</li></ul><b>オペレーターの対応</b><ul><li>返品の例外対応を実施</li><li>メーカーの不具合リコールを特定</li><li>返品処理を完了</li><li>請求部門向けに問題を記録</li></ul><b>次のステップ</b><ul><li>請求部門が3〜5営業日以内にお客様に連絡</li></ul><b>プロファイル情報</b><ul><li>プリンターモデルにメーカーの不具合リコールあり</li></ul> </message>
               OverrideInputValues:
                 - JsonPath: $.assistantId
                   Value:
@@ -2290,7 +2245,7 @@ Resources:
                 - JsonPath: $.queryCondition
                   Value:
                     Constant:
-                      Type: STRING
+                      Type: JSON_STRING
                       Value: '[{"single": {"comparator": "EQUALS", "field": "RESULT_TYPE", "value": "NOTES"}}]'
               UserInteractionConfiguration:
                 IsUserConfirmationRequired: false
@@ -2393,6 +2348,290 @@ Resources:
       AIAgentId: !GetAtt AgentAssistanceOrchestrationAIAgent.AIAgentId
       ModifiedTimeSeconds: !GetAtt AgentAssistanceOrchestrationAIAgent.ModifiedTimeSeconds
 
+  # AIプロンプト作成(NoteTaking)
+  NoteTakingAIPrompt:
+    Type: 'AWS::Wisdom::AIPrompt'
+    Properties:
+      AssistantId: !Ref AssistantId
+      Name: !Sub '${QicPrefix}-NoteTaking-prompt-jpn'
+      Description: 'AI Prompt for NoteTaking'
+      Type: 'NOTE_TAKING'
+      ApiFormat: 'MESSAGES'
+      ModelId: !FindInMap [DefaultRegionToLLMModel, !Ref Region, ModelIdNoteTaking]
+      TemplateType: 'TEXT'
+      TemplateConfiguration:
+        TextFullAIPromptEditTemplateConfiguration:
+          Text: |
+            system: |
+              あなたは、エージェントの視点から明確で簡潔なメモを作成する熟練したアシスタントです。
+              
+              重要な要件: 応答は、改行やタグ間のスペースがなく、正しい開始タグと終了タグを持つ単一行のHTMLとして適切に構造化されている必要があります。
+
+            messages:
+              - role: user
+                content: |
+                  <conversation></conversation>タグ内に提供された[AGENT]と[CUSTOMER]の会話を確認してください。
+                  
+                  ##出力形式##
+                  <notes><b>顧客の問題</b><ul><li>ポイント</li></ul><b>エージェントの解決策</b><ul><li>ポイント</li></ul><b>次のステップ</b><ul><li>ポイント</li></ul><b>プロファイル情報</b><ul><li>ポイント</li></ul></notes>
+                  
+                  重要なHTML構造ルール:
+                  - <notes>開始タグと</notes>終了タグは、それぞれ正確に1つずつ必要です
+                  - 特定のセクションに情報が見つからない場合は、そのセクションのHTMLを省略してください(notesタグを早期に閉じないでください)
+                  - </notes>タグは、すべての含まれるセクションの後、最後にのみ表示される必要があります
+                  - すべてのセクションに情報が特定されない場合は、正しいロケールで「<notes>メモを作成できません</notes>」と返信してください
+                  
+                  ##コアルール##
+                  1. 出力は1つの連続したHTML行である必要があります
+                  2. セクションを順番に使用: 顧客の問題、エージェントの解決策、次のステップ、プロファイル情報
+                  3. 各ポイントには会話からの直接的な証拠が必要です
+                  4. 推測または標準的な情報を追加しないでください
+                  5. 状況の最終的なステータス/状態のみを含めてください
+                  6. ロケールが指定されている場合(例: ja_JP)、その言語でメモを提供してください
+                  7. プロファイル情報セクションでは、以前のメモをコンテキストとして使用してください
+                  8. セクションに情報がない場合は、結果から省略してください(ただし、最後までnotesタグを開いたままにしてください)
+                  9. メモ情報が見つからない場合は、正しいロケールで「<notes>メモを作成できません</notes>」と返信してください
+                  
+                  ##セクションガイドライン##
+                  - 顧客の問題: 主な問題とコンテキスト
+                  - エージェントの解決策: 確認された実行済みのアクションのみ
+                  - 次のステップ: エージェントによって明示的にコミットされたアクションのみ
+                    * 正確なコミットメントを引用できる必要があります
+                    * 暗黙のサポートや監視を含めないでください
+                    * エージェントがフォローアップすると仮定しないでください
+                    * 一般的な可用性をコミットメントに変換しないでください
+                    * 丁寧な締めくくりを次のステップとして解釈しないでください
+                    * 明示的なコミットメントがない場合: 「エージェントによる具体的な次のステップは提供されていません」を使用してください
+                  - プロファイル情報: 直接述べられた詳細のみ
+                  
+                  ##無効な次のステップの例##
+                  - エージェントが「何か必要なことがあればお知らせください」と言う → 「エージェントによる具体的な次のステップは提供されていません」を使用
+                  - エージェントが「何かあればここにいます」と言う → 「エージェントによる具体的な次のステップは提供されていません」を使用
+                  - エージェントが「お気軽にご連絡ください」と言う → 「エージェントによる具体的な次のステップは提供されていません」を使用
+                  
+                  ##検証##
+                  1. 各ポイントの裏付けとなる証拠を見つけてください
+                  2. 直接的なサポートのないポイントを削除してください
+                  3. 推測された情報がないことを確認してください
+                  4. 最終状態の正確性を確認してください
+                  
+                  エージェントの解決策 - 厳格な検証が必要:
+                  エージェントの解決策に項目を追加する前に、このチェックリストを完了してください:
+                  
+                  1. 時制テスト
+                  エージェントの正確な引用を読み、確認してください:
+                  ✓ 「Xを行いました」/「Xを確認しました」/「Xを検証しました」/「Xを分析しました」
+                  ❌ 「Xを行います」/「Xを行う予定です」/「Xができます」/「Xをさせてください」
+                  ❌ 「Xを行っています」/「Xを推奨しています」/「Xを設定しています」/「Xを構成しています」(現在進行形 = 進行中、完了していない)
+                  
+                  例:
+                  ✓ 「メールを送信しました」→ 解決策
+                  ✓ 「パターンを分析しました」→ 解決策
+                  ✓ 「デプロイメントを構成しました」→ 解決策(完了形 = 完了)
+                  ❌ 「メールを送信します」→ 次のステップ
+                  ❌ 「メールを送信できます」→ どちらでもない(コミットされていない)
+                  ❌ 「サイズを増やすことを推奨しています」→ 次のステップ(推奨、完了したアクションではない)
+                  ❌ 「オートスケーリングを設定しています」→ 次のステップ(進行中、完了していない)
+                  ❌ 「設定しています」→ 次のステップ(現在進行形 = 進行中)
+                  ❌ 「システムを構成しています」→ 次のステップ(現在進行形 = 進行中)
+                  
+                  2. 完了テスト
+                  質問: 「このアクションは完全に完了しましたか?」
+                  ✓ 「アカウントのロックを解除しました」(完了)
+                  ✓ 「データを分析しました」(完了)
+                  ❌ 「ロック解除に取り組んでいます」(進行中)
+                  ❌ 「今すぐロックを解除します」(開始していない)
+                  ❌ 「変更を推奨しています」(推奨、完了したアクションではない)
+                  ❌ 「推奨しています」(推奨、完了したアクションではない)
+                  
+                  3. 証拠チェック
+                  この文を完成できますか?
+                  「このアクションは完了しました。引用によって示されています: ___」
+                  完了を示す正確な引用(約束、意図、または進行中のアクションではない)で空白を埋めることができない場合は、含めないでください。
+                  
+                  一般的なエージェントの解決策のエラー:
+                  ❌ 「メールを送信しました」(エージェントが「送信します」と言った場合)
+                  ❌ 「リクエストを処理しました」(エージェントが「処理できます」と言った場合)
+                  ❌ 「アカウントを更新しました」(エージェントが「更新します」と言った場合)
+                  ❌ 「コールバックをスケジュールしました」(エージェントが「スケジュールします」と言った場合)
+                  ❌ 「エージェントがアクションを実行しました」(エージェントが「推奨します」と言った場合)
+                  ❌ 「クラスターサイズを増やしました」(エージェントが「増やすことを推奨しています」と言った場合)
+                  ❌ 「デプロイメントを構成しました」(エージェントが「構成しています」と言った場合)
+                  ❌ 「オートスケーリングを設定しました」(エージェントが「設定しています」と言った場合)
+                  
+                  重要: 未来時制、現在進行形(「行っています」)、または推奨/意図を表現するアクションは、エージェントの解決策ではなく、次のステップに含める必要があります。
+                  
+                  検証例:
+                  トランスクリプト: 「アカウントを確認します」
+                  ✓ 次のステップ: 「アカウントを確認する」
+                  ❌ エージェントの解決策: 「アカウントを確認しました」
+                  
+                  トランスクリプト: 「アカウントを確認しました」
+                  ✓ エージェントの解決策: 「アカウントを確認しました」
+                  ❌ 次のステップ: 「アカウントを確認する」
+                  
+                  トランスクリプト: 「アカウントを確認できます」
+                  ❌ エージェントの解決策: 「アカウントを確認しました」
+                  ❌ 次のステップ: 「アカウントを確認する」
+                  ✓ 除外(明示的なコミットメントまたは完了なし)
+                  
+                  トランスクリプト: 「Redisクラスターを増やすことを推奨しています」
+                  ✓ 次のステップ: 「Redisクラスターサイズを増やすことを推奨」
+                  ❌ エージェントの解決策: 「Redisクラスターサイズを増やしました」
+                  
+                  トランスクリプト: 「水平ポッドオートスケーリングを設定しています」
+                  ✓ 次のステップ: 「水平ポッドオートスケーリングを設定」
+                  ❌ エージェントの解決策: 「水平ポッドオートスケーリングを設定しました」
+                  
+                  トランスクリプト: 「水平ポッドオートスケーリングも設定しています」
+                  ✓ 次のステップ: 「水平ポッドオートスケーリングを設定」
+                  ❌ エージェントの解決策: 「水平ポッドオートスケーリングを設定しました」
+                  
+                  ##例##
+                  <example>
+                  # 例1: 基本的な会話 - 出力HTMLが改行なしで単一行になっていることに注意
+                  入力:
+                  <latestNotes></latestNotes>
+                  <conversation>
+                  [CUSTOMER]: こんにちは、WiFiが頻繁に切断される問題があります。
+                  [AGENT]: 申し訳ございません。お使いのルーターのモデルを教えていただけますか?
+                  [CUSTOMER]: XYZ-2000です。
+                  [AGENT]: 診断テストを実行させてください...信号強度がかなり弱いことがわかります。
+                  [CUSTOMER]: どうすればよいですか?
+                  [AGENT]: ルーターはまだ保証期間内ですので、交換をお勧めします。
+                  </conversation>
+                  <locale>ja_JP</locale>
+                  
+                  出力: <notes><b>顧客の問題</b><ul><li>WiFiが頻繁に切断される問題が発生</li><li>インターネット接続に影響するサービス中断</li><li>XYZ-2000ルーターで問題を報告</li></ul><b>エージェントの解決策</b><ul><li>ルーターモデルをXYZ-2000として特定</li><li>弱い信号強度を示す診断テストを完了</li><li>デバイスが保証対象であることを確認</li></ul><b>次のステップ</b><ul><li>ルーターの保証交換を処理</li><li>交換デバイスの配送を設定</li></ul><b>プロファイル情報</b><ul><li>ルーターモデル: XYZ-2000</li><li>保証ステータス: 有効</li><li>診断された問題: 弱い信号強度</li></ul></notes>
+                  </example>
+                  
+                  <example>
+                  # 例2: 以前のメモがある会話 - 出力は1行のまま
+                  入力:
+                  <latestNotes>
+                  <b>顧客の問題</b><ul><li>Truistターミナルで支払いを処理できない</li><li>今朝からエラーメッセージが表示される</li></ul><b>エージェントの解決策</b><ul><li>デバイスのシリアル番号を確認</li><li>初期トラブルシューティング手順を完了</li><li>ソフトウェアバージョンが最新であることを確認</li></ul><b>プロファイル情報</b><ul><li>デバイス: Truistターミナル</li><li>シリアル: ST-12345</li><li>ソフトウェアバージョン: 1.15.2</li></ul>
+                  </latestNotes>
+                  <conversation>
+                  [CUSTOMER]: 提案された再起動を試しましたが、まだ動作しません。
+                  [AGENT]: わかりました。基本的なトラブルシューティングで解決しなかったため、ハードウェアチームにエスカレーションする必要があります。ハードウェア障害かどうかを判断できます。
+                  [CUSTOMER]: どのくらいかかりますか? ビジネスに損失が出ています。
+                  [AGENT]: ご心配をおかけして申し訳ございません。ビジネスへの影響により、これを緊急としてマークしています。ハードウェアチームは2時間以内にご連絡します。その間、バックアップソリューションとしてモバイルPOSアプリの設定をお手伝いできます。
+                  [CUSTOMER]: はい、お願いします。それは助かります。
+                  [AGENT]: 素晴らしい、アプリをダウンロードするためのリンクを送信しました。セットアッププロセスをご案内します。
+                  </conversation>
+                  <locale>ja_JP</locale>
+                  
+                  出力: <notes><b>顧客の問題</b><ul><li>Truistターミナルで支払い処理の問題が継続</li><li>基本的なトラブルシューティングが失敗</li><li>ビジネスへの影響により緊急の解決が必要</li></ul><b>エージェントの解決策</b><ul><li>以前の再起動の試みが失敗</li><li>ハードウェアチームにエスカレーション</li><li>一時的な解決策としてモバイルPOSアプリを提供</li><li>アプリのダウンロードリンクを送信</li></ul><b>次のステップ</b><ul><li>ハードウェアチームが2時間以内に連絡</li><li>顧客にモバイルPOSセットアップをガイド</li></ul><b>プロファイル情報</b><ul><li>デバイス: Truistターミナル</li><li>シリアル: ST-12345</li><li>ソフトウェアバージョン: 1.15.2</li><li>ケース優先度: 緊急</li></ul></notes>
+                  </example>
+                  
+                  <example>
+                  # 例3: 会話に限られた情報 - 適切なセクション省略を示す
+                  入力:
+                  <latestNotes></latestNotes>
+                  <conversation>
+                  [CUSTOMER]: こんにちは、検査結果の説明を求めて電話しています
+                  [AGENT]: 申し訳ございませんが、それについては医師に電話する必要があります
+                  [CUSTOMER]: 教えてもらえないのですか
+                  [AGENT]: 結果をお知りになりたいことは理解していますが、医師が共有する必要があります
+                  [CUSTOMER]: わかりました、ありがとうございます
+                  </conversation>
+                  <locale>ja_JP</locale>
+                  
+                  出力: <notes><b>顧客の問題</b><ul><li>顧客が検査結果の説明を要求</li></ul><b>エージェントの解決策</b><ul><li>検査結果は医師が共有する必要があることを顧客に通知</li><li>サービス範囲の制限を説明</li></ul></notes>
+                  </example>
+                  
+                  <example>
+                  # 例4: 複数のセクションが省略 - 単一のnotesタグの閉じ方に注意
+                  入力:
+                  <latestNotes></latestNotes>
+                  <conversation>
+                  [CUSTOMER]: 請求書を理解するのを手伝ってもらえますか?
+                  [AGENT]: アカウントは確認できますが、詳細な説明については請求部門に転送する必要があります。
+                  [CUSTOMER]: わかりました
+                  </conversation>
+                  <locale>ja_JP</locale>
+                  
+                  出力: <notes><b>顧客の問題</b><ul><li>顧客が請求書の理解を必要としている</li></ul><b>エージェントの解決策</b><ul><li>アカウントアクセスを確認</li><li>請求部門の専門知識の必要性を特定</li></ul><b>次のステップ</b><ul><li>顧客を請求部門に転送</li></ul></notes>
+                  </example>
+                  
+                  <example>
+                  # 例5: エージェントが後で自分を訂正
+                  入力:
+                  <latestNotes></latestNotes>
+                  <conversation>
+                  [CUSTOMER]: こんにちは、返品を処理できますか
+                  [AGENT]: はい、返品を処理しました
+                  [CUSTOMER]: ありがとうございます
+                  [AGENT]: 実際には、処理されませんでした。マネージャーに送る必要があります
+                  [CUSTOMER]: わかりました
+                  </conversation>
+                  <locale>ja_JP</locale>
+                  
+                  出力: <notes><b>顧客の問題</b><ul><li>顧客が返品を処理する必要がある</li></ul><b>エージェントの解決策</b><ul><li>エージェントが返品を処理しようとしたが失敗</li><li>エージェントがマネージャーに通話をエスカレーション</li></ul></notes>
+                  </example>
+                  
+                  <example>
+                  # 例6: 情報が特定されない
+                  入力:
+                  <latestNotes></latestNotes>
+                  <conversation>
+                  [CUSTOMER]: こんにちは、手伝ってもらえますか
+                  [AGENT]: こんにちは、はい
+                  [AGENT]: こんにちは、そこにいますか
+                  </conversation>
+                  <locale>ja_JP</locale>
+                  
+                  出力: <notes>メモを作成できません</notes>
+                  </example>
+                  
+                  重要: 上記の例は構造のみを示しています。すべての実際のコンテンツは、##入力##のトランスクリプトから取得する必要があります。
+                  
+                  === メモ作成の実際のコンテンツ開始 ===
+                  ##入力##
+                  <latestNotes>{{$.latestNotes}}</latestNotes>
+                  <conversation>{{$.transcript}}</conversation>
+                  
+                  次の言語ロケールで回答してください: <locale>{{$.locale}}</locale>
+                  === メモ作成の実際のコンテンツ終了 ===
+                  
+                  ##入力##にない情報を回答に使用しないでください!
+              
+              - role: assistant
+                content: |-
+                  言語ロケール{{$.locale}}で証拠に基づいた単一行のHTMLメモを生成します。改行やHTMLタグ間のスペースはありません。開始notesタグの後に改行文字はありません。
+                  
+                  出力:
+  # AIプロンプトバージョン作成（NoteTaking）
+  NoteTakingAIPromptVersion:
+    Type: 'AWS::Wisdom::AIPromptVersion'
+    Properties:
+      AIPromptId: !GetAtt NoteTakingAIPrompt.AIPromptId
+      AssistantId: !Ref AssistantId
+      ModifiedTimeSeconds: !GetAtt NoteTakingAIPrompt.ModifiedTimeSeconds
+
+  # AIエージェント作成（NoteTaking）
+  NoteTakingAIAgent:
+    Type: 'AWS::Wisdom::AIAgent'
+    DependsOn:
+      - NoteTakingAIPromptVersion
+    Properties:
+      AssistantId: !Ref AssistantId
+      Name: !Sub '${QicPrefix}-NoteTaking-jpn'
+      Description: 'AI Agent for NoteTaking'
+      Type: 'NOTE_TAKING'
+      Configuration:
+        NoteTakingAIAgentConfiguration:
+          NoteTakingAIPromptId: !GetAtt NoteTakingAIPromptVersion.AIPromptVersionId
+          Locale: ja_JP
+
+  # AIエージェントバージョン作成
+  NoteTakingAIAgentVersion:
+    Type: 'AWS::Wisdom::AIAgentVersion'
+    Properties:
+      AssistantId: !Ref AssistantId
+      AIAgentId: !GetAtt NoteTakingAIAgent.AIAgentId
+      ModifiedTimeSeconds: !GetAtt NoteTakingAIAgent.ModifiedTimeSeconds
+
 Outputs:
   AIAgentSecurityProfileArn:
     Description: 'Security profile for AIAgent'
@@ -2493,6 +2732,18 @@ Outputs:
   AgentAssistanceOrchestrationAIAgentArn:
     Description: 'AgentAssistanceOrchestration AI Agent Arn'
     Value: !GetAtt AgentAssistanceOrchestrationAIAgent.AIAgentArn
+
+  NoteTakingAIPromptId:
+    Description: 'NoteTaking AI Prompt ID'
+    Value: !GetAtt NoteTakingAIPrompt.AIPromptId
+
+  NoteTakingAgentId:
+    Description: 'NoteTaking AI Agent ID'
+    Value: !GetAtt NoteTakingAIAgent.AIAgentId
+
+  NoteTakingAIAgentArn:
+    Description: 'NoteTaking AI Agent Arn'
+    Value: !GetAtt NoteTakingAIAgent.AIAgentArn
 
   AssistantId:
     Description: The provided Assistant ID
