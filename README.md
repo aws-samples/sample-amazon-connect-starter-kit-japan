@@ -10,8 +10,8 @@
 2026年3月
 - 更新内容
   - **AI Agents の更新**: SelfService、AgentAssistant、NoteTaking 用 AI Agent および AI Prompt を更新
-  - これにより、セルフサービスの応答精度が向上しました、また顧客と人間の会話中、会話後にメモ（要約）を作成することが可能です。「会話のメモ、要約を作成してください」と指示をするとその時点のメモを生成します。
   - **AI Agents の更新**: SelfService 用 AI Agent(SelfServiceOrchestration-jpn) および AI Prompt(SelfServiceOrchestration-prompt-jpn) にて、より適切なタイミングでエージェントへエスカレーションするように設定を更新
+  - これらの更新により、セルフサービスの応答精度が向上しました、また顧客と人間の会話中、会話後にメモ（要約）を作成することが可能です。例えば「会話のメモ、要約を作成してください」と指示をするとその時点のメモを生成します。
   - すでに本パッケージをデプロイ済みの場合、ac-pkg-phase3-qic-stack.yaml を実行して AI Agent と AI Prompt を再設定してください
 
 2026年2月
