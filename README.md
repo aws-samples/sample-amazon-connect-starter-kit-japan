@@ -4,20 +4,19 @@
 ※ us-east-1/ap-northeast-1 の両方でデプロイ可能になりました。
 
 ## バージョン情報
-**v2.0.3** (2026年3月)
+**v2.0.4** (2026年3月)
 
 ## 更新情報
 2026年3月
 - 更新内容
+  - **AI Agents の更新**: SelfService、AgentAssistant、NoteTaking 用 AI Agent および AI Prompt を更新
+  - これにより、セルフサービスの応答精度が向上しました、また顧客と人間の会話中、会話後にメモ（要約）を作成することが可能です。「会話のメモ、要約を作成してください」と指示をするとその時点のメモを生成します。
   - **AI Agents の更新**: SelfService 用 AI Agent(SelfServiceOrchestration-jpn) および AI Prompt(SelfServiceOrchestration-prompt-jpn) にて、より適切なタイミングでエージェントへエスカレーションするように設定を更新
   - すでに本パッケージをデプロイ済みの場合、ac-pkg-phase3-qic-stack.yaml を実行して AI Agent と AI Prompt を再設定してください
 
 2026年2月
 - 更新内容
   - **AI Agents の更新**: AgentAssistance 用 AI Agent が回答生成時に Source 情報を表示するように設定を追加
-
-2026年2月
-- 更新内容
   - **AI agents に対応**: Q in Connect から AI agents へ刷新し、オーケストレーションタイプの AI Agent/AI Prompt の日本語版を提供
   - **エスカレーション機能の強化**: 会話型ボットからオペレータへのエスカレーション時に理由や要件を自動判定し、自律的に適切な窓口へ転送が可能に
   - **オペレータ画面の改善**: MyConnectApp(3rd Party App)の画面にボットとの会話要約やエスカレーション理由を自動表示
@@ -74,8 +73,8 @@
 
 ![AgentUI](docs/images/CCP_AgentWorkspace1.jpg)
 ![AgentUI](docs/images/CCP_AgentWorkspace3.jpg)
+![AgentUI](docs/images/CCP_AgentWorkspace4.jpg)
 ![AgentUI](docs/images/CCP_AgentWorkspace2.jpg)
-
 
 ## アーキテクチャー
 
