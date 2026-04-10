@@ -4,9 +4,13 @@
 ※ us-east-1/ap-northeast-1 の両方でデプロイ可能になりました。
 
 ## バージョン情報
-**v2.0.4** (2026年3月)
+**v2.0.5** (2026年4月)
 
 ## 更新情報
+2026年4月
+- 更新内容
+  - Amazon Connect Cases が会話内容の要約に対応（ドキュメント更新）
+  
 2026年3月
 - 更新内容
   - **AI Agents の更新**: SelfService、AgentAssistant、NoteTaking 用 AI Agent および AI Prompt を更新
@@ -24,11 +28,6 @@
   - **デプロイ手順の簡素化**: Cloudformation の見直しにより、ケーステンプレート、Amazon Lex、AWS WAFなどのデプロイを自動化
   - **マルチリージョン対応**: 東京(ap-northeast-1)、バージニア北部(us-east-1)からデプロイ先を選択可能
   - **マルチチャネル対応**: MyConnectApp が Voice,Chat の両チャネルに対応
-  
-2025年11月
-- 更新内容
-  - 「[**Amazon Connect が音声ボットとチャットボット向けの会話分析機能を提供開始**](https://aws.amazon.com/about-aws/whats-new/2025/11/amazon-connect-conversational-analytics/)」にあわせてコンタクトフロー内の会話分析を有効化したサンプルフローモジュールを提供
-  - Amazon Connect Chat でもそのまま使用可能なサンプルフローを提供
 
 2025年9月
 - 初回リリース
@@ -129,7 +128,7 @@
 
 上から順に進み、手順を実施してください。
 
-1.  デプロイメントガイドをダウンロード:[**こちら**](docs/other_docs/AmazonConnectPackage_DeploymentGuide_20260310.pdf)
+1.  デプロイメントガイドをダウンロード:[**こちら**](docs/other_docs/AmazonConnectPackage_DeploymentGuide_20260410.pdf)
 1.  パラメーターシートをダウンロード:[**こちら**](docs/other_docs/AmazonConnectPackage_ParameterSheet.xlsx)
 1.  デプロイモジュールをダウンロード:[**こちら**](docs/other_docs/amazon-connect-project.zip)
 1.  デプロイメントガイドに従い作業を実施
