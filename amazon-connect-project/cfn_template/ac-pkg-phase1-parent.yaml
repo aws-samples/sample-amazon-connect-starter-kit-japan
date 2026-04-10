@@ -9,6 +9,7 @@ Metadata:
         Parameters:
           - CreateNewInstance
           - InstanceAlias
+          - ClaimPhoneNumber
           - ExistingInstanceId
       - Label:
           default: "Amazon Connect AI agents Configuration"
@@ -47,6 +48,14 @@ Parameters:
     Default: 'Yes'
     Description: 'Enable or disable Connect AI agents domain creation. If you select No, you will need to use an existing Connect AI agents domain or create a Connect AI agents domain manually.'
 
+  ClaimPhoneNumber:
+    Type: String
+    AllowedValues: 
+      - 'Yes'
+      - 'No'
+    Default: 'Yes'
+    Description: 'Claim a phone number on a new Amazon Connect instance. If no, manually claim it in the Admin console.'
+  
 Rules:
   ValidateInstanceAlias:
     RuleCondition: !Equals 
@@ -68,6 +77,13 @@ Conditions:
   ShouldCreateNewInstance: !Equals 
     - !Ref CreateNewInstance
     - 'Yes'
+  ShouldClaimPhoneNumber: !Equals 
+    - !Ref ClaimPhoneNumber
+    - 'Yes'
+  ShouldCreateNewInstanceAndClaimPhoneNumber:
+    !And
+      - !Condition ShouldCreateNewInstance
+      - !Condition ShouldClaimPhoneNumber
   CreateAssistantResources: !Equals 
     - !Ref EnableAmazonConnectAIagents
     - 'Yes'
@@ -94,7 +110,7 @@ Resources:
 
   ConnectPhoneNumber:
     Type: AWS::Connect::PhoneNumber
-    Condition: ShouldCreateNewInstance
+    Condition: ShouldCreateNewInstanceAndClaimPhoneNumber
     DependsOn: ConnectInstance
     Properties:
       CountryCode: US
@@ -486,7 +502,7 @@ Outputs:
     Value: !GetAtt Assistant.AssistantArn
   
   PhoneNumber:
-    Condition: ShouldCreateNewInstance
+    Condition: ShouldCreateNewInstanceAndClaimPhoneNumber
     Description: 'The phone number, in E.164 format.'
     Value: !GetAtt ConnectPhoneNumber.Address
   
